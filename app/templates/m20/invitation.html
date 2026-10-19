@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Lời mời tham gia — TeamSync{% endblock %}
+{% block content %}
+<div id="invitation-page" data-token="{{ token }}" class="text-center mt-5">
+  <h1 class="h4">Lời mời tham gia dự án</h1>
+  <p class="text-muted">Bấm nhận lời để trở thành thành viên dự án.</p>
+  <button id="accept-btn" class="btn btn-primary">Nhận lời mời</button>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

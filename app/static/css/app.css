@@ -1,0 +1,2 @@
+/* FILE DÙNG CHUNG. CSS riêng của module: đặt class có tiền tố m10-, m11-, m20- để không đè nhau. */
+.kanban-col { min-height: 300px; }

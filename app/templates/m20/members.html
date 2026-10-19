@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Thành viên dự án — TeamSync{% endblock %}
+{% block content %}
+<div id="members-page" data-project-id="{{ project_id }}"></div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Thành viên dự án</h1>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('m10_pages.project_board', project_id=project_id) }}">← Về bảng Kanban</a>
+</div>
+<table class="table align-middle">
+  <thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th class="text-end">Thao tác</th></tr></thead>
+  <tbody id="members-body"><tr><td colspan="4" class="text-muted">Đang tải…</td></tr></tbody>
+</table>
+<div id="invite-box" class="d-none">
+  <h2 class="h6 mt-4">Mời thành viên</h2>
+  <form id="invite-form" class="d-flex gap-2" style="max-width:480px">
+    <input class="form-control" name="email" type="email" placeholder="Email người được mời" required>
+    <button class="btn btn-primary text-nowrap">Tạo lời mời</button>
+  </form>
+  <div id="invite-result" class="mt-2 small"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}
