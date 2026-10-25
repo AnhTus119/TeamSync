@@ -7,9 +7,9 @@ Bài tập nhóm môn **Lập trình Web** — Đại học Kinh tế Quốc dâ
 
 | Thành viên | Module | Phạm vi | Tài liệu |
 |---|---|---|---|
-| Thành viên 1 | M20 — Tài khoản, SSO và phân quyền | Tài khoản, không gian làm việc, vai trò, lời mời, quản trị | [docs/M20.md](docs/M20.md) |
-| Thành viên 2 | M06 — Quản lý khoa học (quản lý dự án) | Dự án từ mẫu, cột mốc, nhiệm vụ, phụ thuộc, Kanban, minh chứng, duyệt, nghiệm thu | [docs/M06.md](docs/M06.md) |
-| Thành viên 3 | M17 — Dashboard, báo cáo và đánh giá | Thống kê, cảnh báo rủi ro, đèn sức khỏe, sổ đóng góp, đánh giá chéo, CSV | [docs/M17.md](docs/M17.md) |
+| Đoàn Anh Tú | M20 — Tài khoản, SSO và phân quyền | Tài khoản, không gian làm việc, vai trò, lời mời, quản trị | [docs/M20.md](docs/M20.md) |
+| Dương Khánh Duy | M06 — Quản lý khoa học (quản lý dự án) | Dự án từ mẫu, cột mốc, nhiệm vụ, phụ thuộc, Kanban, minh chứng, duyệt, nghiệm thu | [docs/M06.md](docs/M06.md) |
+| Phạm Phương Anh | M17 — Dashboard, báo cáo và đánh giá | Thống kê, cảnh báo rủi ro, đèn sức khỏe, sổ đóng góp, đánh giá chéo, CSV | [docs/M17.md](docs/M17.md) |
 
 Luồng chính: tạo dự án → mời thành viên → lập cột mốc, giao việc → nộp minh chứng → duyệt/trả lại → nghiệm thu cột mốc → xem dashboard và sổ đóng góp.
 
@@ -74,7 +74,3 @@ docs/                    # tài liệu từng module
 scripts/                 # gen_postman.py
 tests/                   # smoke.py, test_m20/m06/m17.py, postman/
 ```
-
-## Quy tắc làm việc
-
-Đọc [CONTRIBUTING.md](CONTRIBUTING.md) trước khi code: ai sửa file nào, định dạng API, quy trình Git.
