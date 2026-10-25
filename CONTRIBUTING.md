@@ -66,7 +66,7 @@ python tests/test_m20.py      # và test của module mình
 
 ## 5. Postman
 
-- `tests/postman/TeamSync.postman_collection.json` là luồng nghiệp vụ đầy đủ có kiểm tra tự động, sinh từ `scripts/build_postman_flow.py`, **do TV3 quản lý**.
+- `tests/postman/TeamSync.postman_collection.json` (luồng nghiệp vụ đầy đủ có kiểm tra tự động) **do TV3 xây và quản lý**.
 - Thêm route thì chạy `python scripts/gen_postman.py` để cập nhật `TeamSync.skeleton.postman_collection.json` (mỗi endpoint một request), rồi báo TV3 bổ sung vào luồng.
 
 ## 6. Họp 10 phút mỗi ngày

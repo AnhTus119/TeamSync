@@ -44,7 +44,6 @@ Mở http://127.0.0.1:5000. Database ở `instance/teamsync.db`, file minh chứ
 | sv1@teamsync.local | Người dùng | Quản lý dự án |
 | sv2@teamsync.local, sv3@teamsync.local | Người dùng | Thành viên |
 | sv4@teamsync.local | Người dùng | Ngoài dự án (để thử bị chặn quyền) |
-| sim1…sim6@teamsync.local | Người dùng | Dữ liệu mô phỏng (workspace "Dữ liệu mô phỏng") |
 
 Dự án demo có sẵn đủ tình huống: việc đã duyệt, việc bị trả lại, việc lâu không cập nhật, việc sắp tới hạn chưa bắt đầu, việc quá hạn, việc bị chặn bởi phụ thuộc, cột mốc đã nghiệm thu.
 
@@ -53,12 +52,10 @@ Dự án demo có sẵn đủ tình huống: việc đã duyệt, việc bị tr
 ```bat
 python tests/smoke.py        :: bắt buộc trước mỗi Pull Request
 python tests/test_m20.py
-python tests/test_m06.py
-python tests/test_m17.py
-python scripts/evaluate_risks.py   :: đánh giá luật cảnh báo trên dữ liệu đã seed
+:: TV2 thêm tests/test_m06.py, TV3 thêm tests/test_m17.py khi làm module
 ```
-Postman: import `tests/postman/TeamSync.postman_collection.json` → **Run collection** (82 request, 121 kiểm tra; chạy lại nhiều lần được).
-`TeamSync.skeleton.postman_collection.json` + `TeamSync.postman_environment.json`: mỗi endpoint một request để gọi thử lẻ.
+Postman: import `tests/postman/TeamSync.skeleton.postman_collection.json` + `TeamSync.postman_environment.json` (mỗi endpoint một request). Endpoint chưa cài đặt trả 501.
+TV3 xây collection luồng nghiệp vụ đầy đủ có kiểm tra tự động.
 
 ## Cấu trúc thư mục
 
@@ -70,11 +67,11 @@ app/
 ├── models/              # m20.py · m06.py · m17.py — mỗi module một file schema
 ├── m20_accounts/        # TV1: api.py, pages.py, permissions.py, services.py, seed.py
 ├── m06_projects/        # TV2: api.py, pages.py, services.py, seed.py
-├── m17_reports/         # TV3: api.py, pages.py, risk.py, seed.py
+├── m17_reports/         # TV3: api.py, pages.py, seed.py
 ├── templates/           # base.html, _project_nav.html + m20/ m06/ m17/
 └── static/              # css/app.css, js/api.js + js/m20.js m06.js m17.js
 docs/                    # tài liệu từng module
-scripts/                 # evaluate_risks.py, build_postman_flow.py, gen_postman.py
+scripts/                 # gen_postman.py
 tests/                   # smoke.py, test_m20/m06/m17.py, postman/
 ```
 

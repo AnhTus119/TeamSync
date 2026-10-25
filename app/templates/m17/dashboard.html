@@ -2,22 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 {% set tab = 'dashboard' %}{% include '_project_nav.html' %}
-<div id="dashboard-page" data-project-id="{{ project_id }}"></div>
-<div class="card p-3 mb-3 d-flex flex-row align-items-center gap-3">
-  <span class="m17-light" id="h-light" style="width:28px;height:28px"></span>
-  <div><div class="fw-semibold" id="h-title">Sức khỏe dự án</div><div class="small text-muted" id="h-reasons"></div></div>
-</div>
-<div class="row g-3 mb-3" id="kpis"></div>
-<div class="row g-3 mb-3">
-  <div class="col-md-5"><div class="card p-3 h-100"><h2 class="h6">Việc theo trạng thái</h2><canvas id="chart-status" height="220"></canvas></div></div>
-  <div class="col-md-7"><div class="card p-3 h-100"><h2 class="h6">Điểm khối lượng theo thành viên</h2><canvas id="chart-points" height="220"></canvas></div></div>
-</div>
-<div class="row g-3">
-  <div class="col-lg-7"><div class="card p-3"><h2 class="h6">Việc có nguy cơ trễ hạn</h2><div id="risks"></div></div></div>
-  <div class="col-lg-5"><div class="card p-3"><h2 class="h6">Hoạt động gần đây</h2><ul class="list-unstyled small mb-0" id="activity"></ul></div></div>
-</div>
+<h1 class="h4">Dashboard</h1>
+<p class="text-muted">TODO: chủ module M17 xây trang này (xem docs/M17.md). Lấy dữ liệu bằng api() trong static/js/m17.js.</p>
 {% endblock %}
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/m17.js') }}"></script>
-{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m17.js') }}"></script>{% endblock %}
