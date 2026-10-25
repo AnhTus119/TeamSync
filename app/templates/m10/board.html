@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Bảng Kanban — TeamSync{% endblock %}
-{% block content %}
-<div id="page" data-project-id="{{ project_id }}"></div>
-<h1 class="h4">Bảng Kanban</h1>
-<p class="text-muted">TODO: chủ module m10 xây trang này. Lấy dữ liệu bằng api() trong static/js/m10.js.</p>
-{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/m10.js') }}"></script>{% endblock %}

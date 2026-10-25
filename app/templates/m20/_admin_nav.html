@@ -1,0 +1,5 @@
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item"><a class="nav-link {{ 'active' if atab == 'users' }}" href="{{ url_for('m20_pages.admin_users') }}">Người dùng</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if atab == 'projects' }}" href="{{ url_for('m20_pages.admin_projects') }}">Dự án</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if atab == 'templates' }}" href="{{ url_for('m20_pages.admin_templates') }}">Mẫu dự án</a></li>
+</ul>

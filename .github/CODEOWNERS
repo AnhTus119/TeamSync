@@ -1,20 +1,40 @@
 # Ai sửa file nào thì PR phải được chủ sở hữu duyệt.
-*                        @AnhTus119 @yuluv57 @abcd-ppa
-/app/m20_accounts/       @AnhTus119
-/app/models/m20.py       @AnhTus119
-/app/templates/m20/      @AnhTus119
-/app/static/js/m20.js    @AnhTus119
-/app/m10_lms/            @yuluv57
-/app/models/m10.py       @yuluv57
-/app/templates/m10/      @yuluv57
-/app/static/js/m10.js    @yuluv57
-/app/m11_analytics/      @abcd-ppa
-/app/models/m11.py       @abcd-ppa
-/app/templates/m11/      @abcd-ppa
-/app/static/js/m11.js    @abcd-ppa
-/tests/postman/          @abcd-ppa
+*                                 @AnhTus119 @yuluv57 @abcd-ppa
+
+# M20 — Thành viên 1
+/app/m20_accounts/                @AnhTus119
+/app/models/m20.py                @AnhTus119
+/app/templates/m20/               @AnhTus119
+/app/static/js/m20.js             @AnhTus119
+/tests/test_m20.py                @AnhTus119
+/docs/M20.md                      @AnhTus119
+
+# M06 — Thành viên 2
+/app/m06_projects/                @yuluv57
+/app/models/m06.py                @yuluv57
+/app/templates/m06/               @yuluv57
+/app/static/js/m06.js             @yuluv57
+/tests/test_m06.py                @yuluv57
+/docs/M06.md                      @yuluv57
+
+# M17 — Thành viên 3
+/app/m17_reports/                 @abcd-ppa
+/app/models/m17.py                @abcd-ppa
+/app/templates/m17/               @abcd-ppa
+/app/static/js/m17.js             @abcd-ppa
+/tests/test_m17.py                @abcd-ppa
+/tests/postman/                   @abcd-ppa
+/scripts/evaluate_risks.py        @abcd-ppa
+/docs/M17.md                      @abcd-ppa
+
 # File dùng chung: cần cả 3 duyệt
-/app/__init__.py         @AnhTus119 @yuluv57 @abcd-ppa
-/app/common/             @AnhTus119 @yuluv57 @abcd-ppa
-/app/models/__init__.py  @AnhTus119 @yuluv57 @abcd-ppa
-/app/templates/base.html @AnhTus119 @yuluv57 @abcd-ppa
+/app/__init__.py                  @AnhTus119 @yuluv57 @abcd-ppa
+/app/config.py                    @AnhTus119 @yuluv57 @abcd-ppa
+/app/common/                      @AnhTus119 @yuluv57 @abcd-ppa
+/app/models/__init__.py           @AnhTus119 @yuluv57 @abcd-ppa
+/app/templates/base.html          @AnhTus119 @yuluv57 @abcd-ppa
+/app/templates/_project_nav.html  @AnhTus119 @yuluv57 @abcd-ppa
+/app/static/js/api.js             @AnhTus119 @yuluv57 @abcd-ppa
+/app/static/css/app.css           @AnhTus119 @yuluv57 @abcd-ppa
+/tests/smoke.py                   @AnhTus119 @yuluv57 @abcd-ppa
+/requirements.txt                 @AnhTus119 @yuluv57 @abcd-ppa

@@ -1,12 +1,7 @@
-from flask import abort, render_template
+from flask import render_template
 
 from . import pages_bp
-from .permissions import current_user, page_login_required
-
-
-def _admin_only():
-    if current_user().role != "admin":
-        abort(403)
+from .permissions import page_admin_required, page_login_required
 
 
 @pages_bp.get("/login")
@@ -25,6 +20,18 @@ def account():
     return render_template("m20/account.html")
 
 
+@pages_bp.get("/workspaces")
+@page_login_required
+def workspaces():
+    return render_template("m20/workspaces.html")
+
+
+@pages_bp.get("/workspaces/<int:workspace_id>")
+@page_login_required
+def workspace_detail(workspace_id):
+    return render_template("m20/workspace_detail.html", workspace_id=workspace_id)
+
+
 @pages_bp.get("/projects/<int:project_id>/members")
 @page_login_required
 def members(project_id):
@@ -38,14 +45,18 @@ def invitation(token):
 
 
 @pages_bp.get("/admin/users")
-@page_login_required
+@page_admin_required
 def admin_users():
-    _admin_only()
     return render_template("m20/admin_users.html")
 
 
 @pages_bp.get("/admin/projects")
-@page_login_required
+@page_admin_required
 def admin_projects():
-    _admin_only()
     return render_template("m20/admin_projects.html")
+
+
+@pages_bp.get("/admin/templates")
+@page_admin_required
+def admin_templates():
+    return render_template("m20/admin_templates.html")

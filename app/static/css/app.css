@@ -1,2 +1,7 @@
-/* FILE DÙNG CHUNG. CSS riêng của module: đặt class có tiền tố m10-, m11-, m20- để không đè nhau. */
-.kanban-col { min-height: 300px; }
+/* FILE DÙNG CHUNG. CSS riêng của module: class có tiền tố m06-, m17-, m20- để không đè nhau. */
+.card { border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+.m06-col { min-height: 320px; background: #eef1f5; border-radius: .5rem; }
+.m06-card { cursor: pointer; }
+.m06-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, .12); }
+.m17-light { width: 18px; height: 18px; border-radius: 50%; display: inline-block; vertical-align: middle; }
+.m17-light.green { background: #2e9d5b; } .m17-light.yellow { background: #e0a800; } .m17-light.red { background: #d64545; }

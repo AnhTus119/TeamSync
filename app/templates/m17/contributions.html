@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Sổ đóng góp{% endblock %}
+{% block content %}
+{% set tab = 'contributions' %}{% include '_project_nav.html' %}
+<div id="contrib-page" data-project-id="{{ project_id }}"></div>
+<div class="card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h6 mb-0">Sổ đóng góp</h2>
+    <a class="btn btn-sm btn-outline-secondary" href="/api/projects/{{ project_id }}/report">Xuất CSV</a>
+  </div>
+  <p class="small text-muted">Mỗi chỉ số hiển thị riêng, không gộp thành điểm xếp hạng. Đây là căn cứ tham khảo cho quản lý và giám sát.</p>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead id="ledger-head"></thead><tbody id="ledger-body"></tbody>
+  </table></div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-6" id="review-box"><div class="card p-3">
+    <h2 class="h6">Đánh giá chéo (ẩn danh)</h2>
+    <form id="review-form" class="row g-2">
+      <div class="col-md-6"><select class="form-select form-select-sm" name="reviewee_id" id="reviewee" required></select></div>
+      <div class="col-md-3"><select class="form-select form-select-sm" name="score">
+        <option value="5">5 — Rất tốt</option><option value="4">4 — Tốt</option><option value="3" selected>3 — Đạt</option>
+        <option value="2">2 — Chưa tốt</option><option value="1">1 — Kém</option></select></div>
+      <div class="col-md-3"><button class="btn btn-sm btn-primary w-100">Gửi</button></div>
+      <div class="col-12"><input class="form-control form-control-sm" name="comment" placeholder="Nhận xét (không bắt buộc)"></div>
+    </form>
+    <div class="small text-muted mt-2" id="my-reviews"></div>
+  </div></div>
+  <div class="col-lg-6 d-none" id="eval-box"><div class="card p-3">
+    <h2 class="h6">Chất lượng luật cảnh báo trên lịch sử dự án</h2>
+    <div id="eval" class="small"></div>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m17.js') }}"></script>{% endblock %}

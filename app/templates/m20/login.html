@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Đăng nhập — TeamSync{% endblock %}
+{% block title %}Đăng nhập{% endblock %}
 {% block content %}
-<div class="row justify-content-center"><div class="col-md-4">
+<div class="row justify-content-center"><div class="col-md-4"><div class="card p-4">
   <h1 class="h4 mb-3">Đăng nhập</h1>
   <form id="login-form">
     <input class="form-control mb-2" name="email" type="email" placeholder="Email" required autocomplete="username">
     <input class="form-control mb-3" name="password" type="password" placeholder="Mật khẩu" required autocomplete="current-password">
     <button class="btn btn-primary w-100">Đăng nhập</button>
   </form>
-  <p class="small mt-3 text-center">Chưa có tài khoản? <a href="{{ url_for('m20_pages.register') }}">Đăng ký</a></p>
-</div></div>
+  <p class="small mt-3 mb-0 text-center">Chưa có tài khoản? <a href="{{ url_for('m20_pages.register') }}">Đăng ký</a></p>
+</div></div></div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

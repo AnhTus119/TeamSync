@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Đăng ký — TeamSync{% endblock %}
+{% block title %}Đăng ký{% endblock %}
 {% block content %}
-<div class="row justify-content-center"><div class="col-md-4">
-  <h1 class="h4 mb-3">Tạo tài khoản sinh viên</h1>
+<div class="row justify-content-center"><div class="col-md-4"><div class="card p-4">
+  <h1 class="h4 mb-3">Tạo tài khoản</h1>
   <form id="register-form">
     <input class="form-control mb-2" name="full_name" placeholder="Họ tên" required>
     <input class="form-control mb-2" name="email" type="email" placeholder="Email" required autocomplete="username">
     <input class="form-control mb-3" name="password" type="password" placeholder="Mật khẩu (≥ 6 ký tự)" minlength="6" required autocomplete="new-password">
     <button class="btn btn-primary w-100">Đăng ký</button>
   </form>
-  <p class="small mt-3 text-center">Đã có tài khoản? <a href="{{ url_for('m20_pages.login') }}">Đăng nhập</a></p>
-</div></div>
+  <p class="small mt-3 mb-0 text-center">Đã có tài khoản? <a href="{{ url_for('m20_pages.login') }}">Đăng nhập</a></p>
+</div></div></div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

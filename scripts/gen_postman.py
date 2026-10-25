@@ -13,10 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import create_app  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "tests" / "postman"
-FOLDERS = {"m20_api": "M20 — Tài khoản & phân quyền", "m10_api": "M10 — LMS (lớp, dự án, nhiệm vụ)",
-           "m11_api": "M11 — Phân tích học tập"}
-VARS = {"base_url": "http://127.0.0.1:5000", "course_id": "1", "project_id": "1", "task_id": "1",
-        "user_id": "4", "token": "paste-token-here"}
+FOLDERS = {"m20_api": "M20 — Tài khoản, workspace, phân quyền", "m06_api": "M06 — Dự án, cột mốc, nhiệm vụ",
+           "m17_api": "M17 — Dashboard, báo cáo, đánh giá"}
+VARS = {"base_url": "http://127.0.0.1:5000", "workspace_id": "1", "project_id": "1", "task_id": "1",
+        "milestone_id": "1", "user_id": "4", "invitation_id": "1", "comment_id": "1", "template_id": "1",
+        "attachment_id": "1", "depends_on_id": "1", "token": "paste-token-here"}
 
 
 def to_postman_path(rule):

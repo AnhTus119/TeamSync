@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Không gian làm việc{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Không gian làm việc</h1>
+</div>
+<div class="row g-3" id="ws-list"></div>
+<div class="card p-3 mt-4" style="max-width:560px">
+  <h2 class="h6">Tạo không gian làm việc</h2>
+  <p class="small text-muted">Ví dụ: một lớp học phần, một câu lạc bộ, một nhóm nghiên cứu, một công ty nhỏ.</p>
+  <form id="ws-form">
+    <input class="form-control mb-2" name="name" placeholder="Tên" required>
+    <textarea class="form-control mb-2" name="description" rows="2" placeholder="Mô tả"></textarea>
+    <button class="btn btn-primary">Tạo</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

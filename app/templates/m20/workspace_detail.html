@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Không gian làm việc{% endblock %}
+{% block content %}
+<div id="ws-page" data-workspace-id="{{ workspace_id }}"></div>
+<div class="mb-3">
+  <a class="small" href="{{ url_for('m20_pages.workspaces') }}">← Không gian làm việc</a>
+  <h1 class="h4 mb-0" id="ws-name">…</h1>
+  <div class="text-muted small" id="ws-desc"></div>
+</div>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card p-3 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 mb-0">Dự án</h2>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="collapse" onclick="document.getElementById('new-project').classList.toggle('d-none')">+ Dự án mới</button>
+      </div>
+      <form id="new-project" class="d-none border rounded p-3 mb-3 bg-light">
+        <div class="row g-2">
+          <div class="col-md-6"><input class="form-control" name="name" placeholder="Tên dự án" required></div>
+          <div class="col-md-6"><select class="form-select" name="template_id" id="tpl-select"><option value="">Không dùng mẫu</option></select></div>
+          <div class="col-12"><textarea class="form-control" name="description" rows="2" placeholder="Mô tả"></textarea></div>
+          <div class="col-md-4"><label class="small">Bắt đầu</label><input class="form-control" type="date" name="start_date"></div>
+          <div class="col-md-4"><label class="small">Hạn kết thúc</label><input class="form-control" type="date" name="due_date"></div>
+          <div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary w-100">Tạo dự án</button></div>
+        </div>
+        <div class="small text-muted mt-2" id="tpl-hint"></div>
+      </form>
+      <table class="table align-middle mb-0">
+        <thead><tr><th>Dự án</th><th>Vai trò của bạn</th><th>Hạn</th><th>Sức khỏe</th><th class="text-end">Tiến độ</th></tr></thead>
+        <tbody id="ws-projects"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3">
+      <h2 class="h6">Thành viên</h2>
+      <ul class="list-group list-group-flush mb-2" id="ws-members"></ul>
+      <form id="ws-add-member" class="d-none d-flex gap-2">
+        <input class="form-control form-control-sm" name="email" type="email" placeholder="Email người đã có tài khoản" required>
+        <button class="btn btn-sm btn-outline-primary text-nowrap">Thêm</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}
