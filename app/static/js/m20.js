@@ -48,7 +48,8 @@ if ($("ws-page")) {
 
   async function loadWorkspace() {
     const [ws, members, projects] = await Promise.all([
-      api("GET", `/api/workspaces/${wid}`), api("GET", `/api/workspaces/${wid}/members`), api("GET", `/api/workspaces/${wid}/projects`)]);
+      api("GET", `/api/workspaces/${wid}`), api("GET", `/api/workspaces/${wid}/members`),
+      api("GET", `/api/workspaces/${wid}/projects`).catch(() => [])]);  // M06 chưa xong thì để trống
     const isOwner = ws.my_role === "owner" || ME.role === "admin";
     $("ws-name").textContent = ws.name;
     $("ws-desc").textContent = ws.description || "";
@@ -57,7 +58,7 @@ if ($("ws-page")) {
       <span>${esc(m.user.full_name)}<br><span class="small text-muted">${esc(m.user.email)}</span></span>
       ${m.role === "owner" ? '<span class="badge text-bg-primary">Chủ</span>'
         : isOwner ? `<button class="btn btn-sm btn-link text-danger" data-remove="${m.user.id}">Xóa</button>` : ""}</li>`).join("");
-    const overview = isOwner ? await api("GET", `/api/workspaces/${wid}/overview`) : [];
+    const overview = isOwner ? await api("GET", `/api/workspaces/${wid}/overview`).catch(() => []) : [];
     const ov = Object.fromEntries(overview.map((o) => [o.project_id, o]));
     $("ws-projects").innerHTML = projects.map((p) => `<tr>
       <td><a href="/projects/${p.id}">${esc(p.name)}</a></td><td>${p.my_role ? label(p.my_role) : "—"}</td>
@@ -74,7 +75,7 @@ if ($("ws-page")) {
     e.preventDefault();
     handle(api("POST", `/api/workspaces/${wid}/members`, formData(e.target)).then(() => { e.target.reset(); return loadWorkspace(); }));
   };
-  api("GET", "/api/templates").then((list) => {
+  api("GET", "/api/templates").catch(() => []).then((list) => {
     templates = list;
     $("tpl-select").innerHTML += list.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
   });
@@ -97,8 +98,9 @@ if ($("members-page")) {
   let isManager = false;
 
   async function loadMembers() {
-    const [p, members] = await Promise.all([loadProjectHeader(pid), api("GET", `/api/projects/${pid}/members`)]);
-    isManager = p.my_role === "manager" || ME.role === "admin";
+    loadProjectHeader(pid).catch(() => {});  // tiêu đề dự án lấy từ API M06
+    const members = await api("GET", `/api/projects/${pid}/members`);
+    isManager = ME.role === "admin" || members.some((m) => m.user.id === ME.id && m.project_role === "manager");
     $("invite-box").classList.toggle("d-none", !isManager);
     $("members-body").innerHTML = members.map((m) => {
       const actions = isManager && m.project_role !== "manager" ? `
@@ -194,7 +196,7 @@ if ($("tpl-list")) {
   let templates = [];
 
   async function loadTemplates() {
-    templates = await api("GET", "/api/templates");
+    templates = await api("GET", "/api/templates").catch(() => []);
     $("tpl-list").innerHTML = templates.map((t) => `<li class="list-group-item px-0 d-flex justify-content-between">
       <span><b>${esc(t.name)}</b><br><span class="small text-muted">${t.milestones.length} cột mốc · ${t.tasks.length} việc</span></span>
       <span><button class="btn btn-sm btn-link" data-edit="${t.id}">Sửa</button>

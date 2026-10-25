@@ -105,8 +105,10 @@ p = next(x for x in api("GET", "/api/admin/projects") if x["id"] == 1)
 assert p["manager"]["id"] == ids["sv3"] and p["workspace_name"] == "Lớp Lập trình Web 01"
 
 # ẩn bình luận
-comment = api("GET", "/api/tasks/2/comments")[0]
-hidden = api("PATCH", f"/api/admin/comments/{comment['id']}", {"is_hidden": True})
+with app.app_context():
+    from app.models import Comment
+    comment_id = Comment.query.first().id
+hidden = api("PATCH", f"/api/admin/comments/{comment_id}", {"is_hidden": True})
 assert hidden["is_hidden"] and hidden["content"] == "[Nội dung đã bị ẩn]"
 api("PATCH", "/api/admin/comments/999", {"is_hidden": True}, 404, "COMMENT_NOT_FOUND")
 

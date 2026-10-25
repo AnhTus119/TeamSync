@@ -1,65 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Chi tiết việc{% endblock %}
 {% block content %}
-<div id="task-page" data-task-id="{{ task_id }}"></div>
-<a class="small" id="back-link" href="#">← Về bảng Kanban</a>
-<div class="row g-4 mt-1">
-  <div class="col-lg-8">
-    <div class="card p-3 mb-3">
-      <div class="d-flex justify-content-between align-items-start gap-2">
-        <h1 class="h4 mb-1" id="t-title">…</h1>
-        <span class="badge text-bg-secondary" id="t-status"></span>
-      </div>
-      <div class="text-muted small mb-2" id="t-meta"></div>
-      <p id="t-desc" class="mb-2" style="white-space:pre-wrap"></p>
-      <div id="t-actions" class="d-flex flex-wrap gap-2"></div>
-      <form id="return-form" class="mt-2 d-none d-flex gap-2">
-        <input class="form-control form-control-sm" name="note" placeholder="Lý do trả lại (bắt buộc)" required>
-        <button class="btn btn-sm btn-danger text-nowrap">Trả lại</button>
-      </form>
-    </div>
-    <div class="card p-3 mb-3">
-      <h2 class="h6">Minh chứng</h2>
-      <ul class="list-group list-group-flush mb-2" id="t-evidence"></ul>
-      <form id="evidence-form" class="d-none row g-2">
-        <div class="col-md-5"><input class="form-control form-control-sm" type="file" name="file"></div>
-        <div class="col-md-5"><input class="form-control form-control-sm" name="url" placeholder="hoặc link (GitHub, Drive…)"></div>
-        <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">Nộp</button></div>
-      </form>
-    </div>
-    <div class="card p-3">
-      <h2 class="h6">Bình luận</h2>
-      <div id="t-comments" class="mb-2"></div>
-      <form id="comment-form" class="d-flex gap-2">
-        <input class="form-control form-control-sm" name="content" placeholder="Viết bình luận…" required>
-        <button class="btn btn-sm btn-primary">Gửi</button>
-      </form>
-    </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card p-3 mb-3" id="edit-card">
-      <h2 class="h6">Thông tin</h2>
-      <form id="edit-form">
-        <label class="small">Người làm</label><select class="form-select form-select-sm mb-2" name="assignee_id"></select>
-        <label class="small">Hạn</label><input class="form-control form-control-sm mb-2" type="date" name="due_date">
-        <label class="small">Điểm khối lượng</label><select class="form-select form-select-sm mb-2" name="points"><option>1</option><option>2</option><option>3</option><option>5</option></select>
-        <label class="small">Ưu tiên</label><select class="form-select form-select-sm mb-2" name="priority"><option value="low">Thấp</option><option value="medium">Trung bình</option><option value="high">Cao</option></select>
-        <button class="btn btn-sm btn-outline-primary d-none" id="edit-save">Lưu thay đổi</button>
-      </form>
-    </div>
-    <div class="card p-3 mb-3">
-      <h2 class="h6">Phụ thuộc vào</h2>
-      <ul class="list-group list-group-flush mb-2" id="t-deps"></ul>
-      <form id="dep-form" class="d-none d-flex gap-2">
-        <select class="form-select form-select-sm" name="depends_on_id" id="dep-select"></select>
-        <button class="btn btn-sm btn-outline-primary">Thêm</button>
-      </form>
-    </div>
-    <div class="card p-3">
-      <h2 class="h6">Lịch sử</h2>
-      <ul class="list-unstyled small mb-0" id="t-history"></ul>
-    </div>
-  </div>
-</div>
+<h1 class="h4">Chi tiết việc</h1>
+<p class="text-muted">TODO: chủ module M06 xây trang này (xem docs/M06.md). Lấy dữ liệu bằng api() trong static/js/m06.js.</p>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m06.js') }}"></script>{% endblock %}
