@@ -1,22 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Thành viên dự án — TeamSync{% endblock %}
+{% block title %}Thành viên dự án{% endblock %}
 {% block content %}
+{% set tab = 'members' %}{% include '_project_nav.html' %}
 <div id="members-page" data-project-id="{{ project_id }}"></div>
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Thành viên dự án</h1>
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('m10_pages.project_board', project_id=project_id) }}">← Về bảng Kanban</a>
+<div class="card p-3 mb-4">
+  <table class="table align-middle mb-0">
+    <thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th class="text-end">Thao tác</th></tr></thead>
+    <tbody id="members-body"><tr><td colspan="4" class="text-muted">Đang tải…</td></tr></tbody>
+  </table>
 </div>
-<table class="table align-middle">
-  <thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th class="text-end">Thao tác</th></tr></thead>
-  <tbody id="members-body"><tr><td colspan="4" class="text-muted">Đang tải…</td></tr></tbody>
-</table>
-<div id="invite-box" class="d-none">
-  <h2 class="h6 mt-4">Mời thành viên</h2>
-  <form id="invite-form" class="d-flex gap-2" style="max-width:480px">
-    <input class="form-control" name="email" type="email" placeholder="Email người được mời" required>
-    <button class="btn btn-primary text-nowrap">Tạo lời mời</button>
+<div id="invite-box" class="card p-3 d-none">
+  <h2 class="h6">Mời người tham gia</h2>
+  <form id="invite-form" class="row g-2" style="max-width:640px">
+    <div class="col-md-6"><input class="form-control" name="email" type="email" placeholder="Email người được mời" required></div>
+    <div class="col-md-3"><select class="form-select" name="project_role"><option value="member">Thành viên</option><option value="supervisor">Giám sát</option></select></div>
+    <div class="col-md-3"><button class="btn btn-primary w-100">Tạo lời mời</button></div>
   </form>
   <div id="invite-result" class="mt-2 small"></div>
+  <h3 class="h6 mt-3">Lời mời đang chờ</h3>
+  <ul class="list-group list-group-flush" id="invite-list"></ul>
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

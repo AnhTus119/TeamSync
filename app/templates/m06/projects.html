@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Dự án của tôi{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Dự án của tôi</h1>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('m20_pages.workspaces') }}">+ Tạo dự án trong một không gian làm việc</a>
+</div>
+<div class="row g-3" id="project-list"><div class="text-muted">Đang tải…</div></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m06.js') }}"></script>{% endblock %}

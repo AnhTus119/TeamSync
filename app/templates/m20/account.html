@@ -1,15 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Tài khoản — TeamSync{% endblock %}
+{% block title %}Tài khoản{% endblock %}
 {% block content %}
-<div class="row"><div class="col-md-5">
+<div class="row"><div class="col-md-6"><div class="card p-4">
   <h1 class="h4 mb-3">Tài khoản của tôi</h1>
-  <dl class="row" id="profile"></dl>
+  <dl class="row mb-0">
+    <dt class="col-4">Họ tên</dt><dd class="col-8">{{ me.full_name }}</dd>
+    <dt class="col-4">Email</dt><dd class="col-8">{{ me.email }}</dd>
+    <dt class="col-4">Vai trò</dt><dd class="col-8">{{ 'Quản trị viên' if me.role == 'admin' else 'Người dùng' }}</dd>
+  </dl>
   <h2 class="h6 mt-4">Đổi mật khẩu</h2>
   <form id="password-form">
     <input class="form-control mb-2" name="old_password" type="password" placeholder="Mật khẩu hiện tại" required autocomplete="current-password">
     <input class="form-control mb-3" name="new_password" type="password" placeholder="Mật khẩu mới (≥ 6 ký tự)" minlength="6" required autocomplete="new-password">
     <button class="btn btn-primary">Lưu</button>
   </form>
-</div></div>
+</div></div></div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

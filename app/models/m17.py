@@ -1,5 +1,5 @@
-"""Bảng của M11 — Phân tích học tập. Chủ sở hữu: Thành viên 3.
-M11 chỉ ĐỌC bảng của M10; bảng duy nhất M11 ghi là PeerReview."""
+"""Bảng của M17 — Dashboard, báo cáo và đánh giá. Chủ sở hữu: Thành viên 3.
+M17 chỉ ĐỌC bảng của M06; bảng duy nhất M17 ghi là PeerReview."""
 from ..common.utils import iso, now
 from ..extensions import db
 

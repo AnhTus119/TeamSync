@@ -2,7 +2,7 @@
 -
 
 ## Module
-- [ ] M20  - [ ] M10  - [ ] M11  - [ ] File dùng chung (đã báo nhóm)
+- [ ] M20  - [ ] M06  - [ ] M17  - [ ] File dùng chung (đã báo nhóm)
 
 ## Đã kiểm tra
 - [ ] `python tests/smoke.py` ra SMOKE OK

@@ -1,42 +1,27 @@
 {
   "info": {
-    "name": "TeamSync API",
+    "name": "TeamSync — luồng nghiệp vụ đầy đủ",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Đăng nhập trước (Postman tự giữ cookie session), rồi gọi API. Đổi vai trò = gọi lại request Đăng nhập khác."
+    "description": "Chạy theo thứ tự bằng Run collection sau khi `flask --app run seed`. Postman tự giữ cookie đăng nhập. Mỗi lần chạy tạo workspace và dự án mới nên chạy lại nhiều lần được."
   },
   "item": [
     {
-      "name": "00 — Đăng nhập theo vai trò",
+      "name": "0. Chuẩn bị",
       "item": [
         {
-          "name": "Đăng nhập: admin",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Đăng nhập gv",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"gv_id\", pm.response.json().data.id);"
+                ]
               }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/auth/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "login"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@teamsync.local\",\n  \"password\": \"123456\"\n}"
             }
-          }
-        },
-        {
-          "name": "Đăng nhập: gv",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -63,34 +48,19 @@
           }
         },
         {
-          "name": "Đăng nhập: sv1",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Đăng nhập sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv2_id\", pm.response.json().data.id);"
+                ]
               }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/auth/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "login"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
             }
-          }
-        },
-        {
-          "name": "Đăng nhập: sv2",
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -117,7 +87,19 @@
           }
         },
         {
-          "name": "Đăng nhập: sv4",
+          "name": "Đăng nhập sai mật khẩu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error.code = INVALID_CREDENTIALS\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_CREDENTIALS\"));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -139,84 +121,24 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"sv4@teamsync.local\",\n  \"password\": \"123456\"\n}"
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"sai\"\n}"
             }
           }
-        }
-      ]
-    },
-    {
-      "name": "M20 — Tài khoản & phân quyền",
-      "item": [
-        {
-          "name": "GET /api/admin/projects",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/admin/projects",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "projects"
-              ]
-            },
-            "description": "→ 200 {data: [project + số thành viên + số task]}."
-          }
         },
         {
-          "name": "GET /api/admin/users",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/admin/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "users"
-              ]
-            },
-            "description": "Query: ?q=&role=&is_active= → 200 {data: [user...]}."
-          }
-        },
-        {
-          "name": "PATCH /api/admin/users/<int:user_id>",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
               }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/admin/users/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "users",
-                "{{user_id}}"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {role?, is_active?} → 200 {data: user}. Không tự khóa chính mình."
-          }
-        },
-        {
-          "name": "POST /api/auth/login",
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -238,40 +160,24 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {email, password} → 200 {data: user}; set cookie session."
-          }
-        },
-        {
-          "name": "POST /api/auth/logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/auth/logout",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "logout"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
             }
           }
         },
         {
-          "name": "GET /api/auth/me",
+          "name": "Xem tôi là ai",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"đúng sv1\", () => pm.expect(pm.response.json().data.email === \"sv1@teamsync.local\").to.be.true);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -287,38 +193,27 @@
               ]
             }
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "1. M20 — Workspace, lời mời, vai trò",
+      "item": [
         {
-          "name": "PATCH /api/auth/me/password",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Tạo workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"là chủ\", () => pm.expect(pm.response.json().data.my_role === \"owner\").to.be.true);",
+                  "pm.collectionVariables.set(\"ws_id\", pm.response.json().data.id);"
+                ]
               }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/auth/me/password",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "me",
-                "password"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {old_password, new_password} → 200."
-          }
-        },
-        {
-          "name": "POST /api/auth/register",
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -328,25 +223,34 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/auth/register",
+              "raw": "{{base_url}}/api/workspaces",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "auth",
-                "register"
+                "workspaces"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {email, password, full_name} → 201 {data: user}. Tài khoản mới luôn là student."
+              "raw": "{\n  \"name\": \"Postman workspace {{$timestamp}}\"\n}"
+            }
           }
         },
         {
-          "name": "POST /api/invitations/<token>/accept",
+          "name": "Thêm sv2 vào workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -356,26 +260,398 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/invitations/{{token}}/accept",
+              "raw": "{{base_url}}/api/workspaces/{{ws_id}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{ws_id}}",
+                "members"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Thêm email chưa có tài khoản",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error.code = USER_NOT_FOUND\", () => pm.expect(pm.response.json().error.code).to.eql(\"USER_NOT_FOUND\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{ws_id}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{ws_id}}",
+                "members"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"khong-co@x.vn\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Danh sách mẫu dự án",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"có ≥ 4 mẫu\", () => pm.expect(pm.response.json().data.length >= 4).to.be.true);",
+                  "pm.collectionVariables.set(\"tpl_id\", pm.response.json().data.find(t => t.name === \"Phát triển phần mềm\").id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "templates"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tạo dự án từ mẫu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"người tạo là quản lý\", () => pm.expect(pm.response.json().data.my_role === \"manager\").to.be.true);",
+                  "pm.collectionVariables.set(\"pid\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{ws_id}}/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{ws_id}}",
+                "projects"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dự án Postman {{$timestamp}}\",\n  \"description\": \"Tạo bởi Postman\",\n  \"template_id\": {{tpl_id}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Mời sv2 làm thành viên",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"token_member\", pm.response.json().data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/invitations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "invitations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Mời gv làm giám sát",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"token_sup\", pm.response.json().data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/invitations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "invitations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gv@teamsync.local\",\n  \"project_role\": \"supervisor\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Mời với vai trò không hợp lệ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/invitations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "invitations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"a@b.vn\",\n  \"project_role\": \"manager\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv2_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "sv2 xem lời mời",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"vai trò member\", () => pm.expect(pm.response.json().data.project_role === \"member\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{token_member}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "invitations",
-                "{{token}}",
-                "accept"
+                "{{token_member}}"
               ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "User đang đăng nhập (đúng email được mời) nhận lời → 200 {data: member}."
+            }
           }
         },
         {
-          "name": "POST /api/projects/<int:project_id>/invitations",
+          "name": "sv2 nhận lời mời",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{token_member}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "invitations",
+                "{{token_member}}",
+                "accept"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nhận lại lời mời đã dùng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = INVITATION_USED\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVITATION_USED\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{token_member}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "invitations",
+                "{{token_member}}",
+                "accept"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập gv",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"gv_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -385,46 +661,137 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/invitations",
+              "raw": "{{base_url}}/api/auth/login",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "projects",
-                "{{project_id}}",
-                "invitations"
+                "auth",
+                "login"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm. Body: {email} → 201 {data: invitation}. Dùng check_project_access(project_id, leader=True)."
+              "raw": "{\n  \"email\": \"gv@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
           }
         },
         {
-          "name": "GET /api/projects/<int:project_id>/members",
+          "name": "gv nhận lời mời giám sát",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"là giám sát\", () => pm.expect(pm.response.json().data.project_role === \"supervisor\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{token_sup}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "invitations",
+                "{{token_sup}}",
+                "accept"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Danh sách thành viên",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"đủ 3 vai trò, đúng thứ tự\", () => pm.expect(pm.response.json().data.map(m => m.project_role).join() === \"manager,member,supervisor\").to.be.true);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/members",
+              "raw": "{{base_url}}/api/projects/{{pid}}/members",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "projects",
-                "{{project_id}}",
+                "{{pid}}",
                 "members"
               ]
-            },
-            "description": "→ 200 {data: [member...]}."
+            }
           }
         },
         {
-          "name": "PATCH /api/projects/<int:project_id>/members/<int:user_id>",
+          "name": "Hạ quyền quản lý duy nhất",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = LAST_MANAGER\", () => pm.expect(pm.response.json().error.code).to.eql(\"LAST_MANAGER\"));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
@@ -434,164 +801,352 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/members/{{user_id}}",
+              "raw": "{{base_url}}/api/projects/{{pid}}/members/{{sv1_id}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "projects",
-                "{{project_id}}",
+                "{{pid}}",
                 "members",
-                "{{user_id}}"
+                "{{sv1_id}}"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm. Body: {project_role}. Chuyển 'leader' cho người khác thì mình thành 'member'."
-          }
-        },
-        {
-          "name": "DELETE /api/projects/<int:project_id>/members/<int:user_id>",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/members/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "members",
-                "{{user_id}}"
-              ]
-            },
-            "description": "Chỉ trưởng nhóm; không xóa chính trưởng nhóm. → 200."
+              "raw": "{\n  \"project_role\": \"member\"\n}"
+            }
           }
         }
       ]
     },
     {
-      "name": "M10 — LMS (lớp, dự án, nhiệm vụ)",
+      "name": "2. M06 — Nhiệm vụ, minh chứng, duyệt, cột mốc",
       "item": [
         {
-          "name": "GET /api/courses",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/courses",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "courses"
-              ]
-            },
-            "description": "GV: lớp mình dạy; SV: lớp có dự án mình tham gia; admin: tất cả → 200 {data: [course]}."
-          }
-        },
-        {
-          "name": "POST /api/courses",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+          "name": "Danh sách việc tạo từ mẫu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"6 việc từ mẫu\", () => pm.expect(pm.response.json().data.length === 6).to.be.true);"
+                ]
               }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/courses",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "courses"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {code, name} → 201 {data: course}."
-          }
-        },
-        {
-          "name": "GET /api/courses/<int:course_id>/projects",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/projects",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "courses",
-                "{{course_id}}",
-                "projects"
-              ]
             }
-          }
-        },
-        {
-          "name": "POST /api/courses/<int:course_id>/projects",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/projects",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "courses",
-                "{{course_id}}",
-                "projects"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {name, description?, due_date?} → 201 {data: project}.\nSau khi tạo: m20_accounts.services.add_member(project.id, user.id, \"leader\")."
-          }
-        },
-        {
-          "name": "GET /api/projects/<int:project_id>",
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "projects",
-                "{{project_id}}"
+                "{{pid}}",
+                "tasks"
               ]
             }
           }
         },
         {
-          "name": "PATCH /api/projects/<int:project_id>",
+          "name": "Giao việc cho giám sát (không hợp lệ)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error.code = INVALID_ASSIGNEE\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_ASSIGNEE\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"x\",\n  \"assignee_id\": {{gv_id}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Tạo việc cho sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"task_a\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Viết API đăng nhập\",\n  \"assignee_id\": {{sv2_id}},\n  \"points\": 3,\n  \"priority\": \"high\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Tạo việc phụ thuộc",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"task_b\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Kiểm thử API đăng nhập\",\n  \"assignee_id\": {{sv2_id}},\n  \"points\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "B phụ thuộc A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_b}}/dependencies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_b}}",
+                "dependencies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depends_on_id\": {{task_a}}\n}"
+            }
+          }
+        },
+        {
+          "name": "A phụ thuộc B → vòng lặp",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = DEPENDENCY_CYCLE\", () => pm.expect(pm.response.json().error.code).to.eql(\"DEPENDENCY_CYCLE\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/dependencies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_a}}",
+                "dependencies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depends_on_id\": {{task_b}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv2_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "sv2 tạo việc (không phải quản lý)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"x\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Bắt đầu B khi A chưa xong",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = BLOCKED_BY_DEPENDENCY\", () => pm.expect(pm.response.json().error.code).to.eql(\"BLOCKED_BY_DEPENDENCY\"));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
@@ -601,111 +1156,36 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm. Body: {name?, description?, due_date?}."
-          }
-        },
-        {
-          "name": "DELETE /api/projects/<int:project_id>",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}"
-              ]
-            },
-            "description": "Chỉ trưởng nhóm / admin."
-          }
-        },
-        {
-          "name": "GET /api/projects/<int:project_id>/tasks",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/tasks",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "tasks"
-              ]
-            },
-            "description": "Query: ?status=&assignee_id=&due=overdue|today|week → 200 {data: [task]}."
-          }
-        },
-        {
-          "name": "POST /api/projects/<int:project_id>/tasks",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/tasks",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "tasks"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm. Body: {title, description?, priority?, due_date?, assignee_id?} → 201.\nassignee_id phải là thành viên dự án. Ghi log_history(task, \"created\")."
-          }
-        },
-        {
-          "name": "GET /api/tasks/<int:task_id>",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "raw": "{{base_url}}/api/tasks/{{task_b}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}"
+                "{{task_b}}",
+                "status"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\"\n}"
             }
           }
         },
         {
-          "name": "PATCH /api/tasks/<int:task_id>",
+          "name": "Bắt đầu A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
@@ -715,43 +1195,76 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}"
+                "{{task_a}}",
+                "status"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm. Body: {title?, description?, priority?, due_date?, assignee_id?}."
+              "raw": "{\n  \"status\": \"in_progress\"\n}"
+            }
           }
         },
         {
-          "name": "DELETE /api/tasks/<int:task_id>",
+          "name": "Gửi duyệt khi chưa có minh chứng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = EVIDENCE_REQUIRED\", () => pm.expect(pm.response.json().error.code).to.eql(\"EVIDENCE_REQUIRED\"));"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "DELETE",
-            "header": [],
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}"
+                "{{task_a}}",
+                "status"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"review\"\n}"
             }
           }
         },
         {
-          "name": "POST /api/tasks/<int:task_id>/attachments",
+          "name": "Nộp minh chứng (link)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -761,45 +1274,76 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/attachments",
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/attachments",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}",
+                "{{task_a}}",
                 "attachments"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "multipart/form-data field 'file' HOẶC JSON {url} → 201 {data: attachment}. Chỉ pdf, png, jpg, docx, zip."
+              "raw": "{\n  \"url\": \"https://github.com/AnhTus119/TeamSync/pull/1\"\n}"
+            }
           }
         },
         {
-          "name": "GET /api/tasks/<int:task_id>/comments",
+          "name": "Gửi duyệt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/comments",
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}",
-                "comments"
+                "{{task_a}}",
+                "status"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"review\"\n}"
             }
           }
         },
         {
-          "name": "POST /api/tasks/<int:task_id>/comments",
+          "name": "Bình luận",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"comment_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -809,45 +1353,410 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/comments",
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/comments",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}",
+                "{{task_a}}",
                 "comments"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {content} → 201."
+              "raw": "{\n  \"content\": \"Em đã nộp, nhờ anh duyệt\"\n}"
+            }
           }
         },
         {
-          "name": "GET /api/tasks/<int:task_id>/history",
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/history",
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Trả lại không ghi lý do",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/review",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}",
+                "{{task_a}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"return\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Trả lại có lý do",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"về Đang làm\", () => pm.expect(pm.response.json().data.status === \"in_progress\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_a}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"return\",\n  \"note\": \"Thiếu kiểm tra tài khoản bị khóa\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv2_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Gửi duyệt lại",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_a}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"review\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Duyệt hoàn thành",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"done, có completed_at\", () => pm.expect(pm.response.json().data.status === \"done\" && !!pm.response.json().data.completed_at).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_a}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approve\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Lịch sử việc A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"ghi 2 lần duyệt/trả lại\", () => pm.expect(pm.response.json().data.filter(h => h.field === \"review\").length === 2).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_a}}/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_a}}",
                 "history"
               ]
             }
           }
         },
         {
-          "name": "POST /api/tasks/<int:task_id>/review",
+          "name": "Chi tiết B — hết bị chặn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"không còn bị chặn\", () => pm.expect(pm.response.json().data.blocked === false).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_b}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_b}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lọc việc quá hạn",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/tasks?due=overdue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "due",
+                  "value": "overdue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tạo cột mốc",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"ms_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -857,26 +1766,185 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/review",
+              "raw": "{{base_url}}/api/projects/{{pid}}/milestones",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "tasks",
-                "{{task_id}}",
+                "projects",
+                "{{pid}}",
+                "milestones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bản demo nội bộ\",\n  \"description\": \"Chạy được luồng chính\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Gửi nghiệm thu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"chờ nghiệm thu\", () => pm.expect(pm.response.json().data.status === \"pending_review\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{ms_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{ms_id}}",
+                "submit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Quản lý tự nghiệm thu khi đã có giám sát",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{ms_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{ms_id}}",
                 "review"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Chỉ trưởng nhóm, task đang 'review'. Body: {action: approve|return, note}. return bắt buộc note."
+              "raw": "{\n  \"action\": \"accept\"\n}"
+            }
           }
         },
         {
-          "name": "PATCH /api/tasks/<int:task_id>/status",
+          "name": "Đăng nhập gv",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"gv_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gv@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Giám sát yêu cầu sửa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"yêu cầu sửa\", () => pm.expect(pm.response.json().data.status === \"changes_requested\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{ms_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{ms_id}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"request_changes\",\n  \"note\": \"Bổ sung tài liệu hướng dẫn\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Giám sát không được đổi trạng thái việc",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
@@ -886,112 +1954,37 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/{{task_id}}/status",
+              "raw": "{{base_url}}/api/tasks/{{task_b}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "tasks",
-                "{{task_id}}",
+                "{{task_b}}",
                 "status"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Người được giao hoặc trưởng nhóm. Body: {status: todo|in_progress|review, note?}.\nKhông cho set 'done' ở đây — 'done' chỉ đi qua /review. Sai luồng → 409 INVALID_TRANSITION."
-          }
-        }
-      ]
-    },
-    {
-      "name": "M11 — Phân tích học tập",
-      "item": [
-        {
-          "name": "GET /api/courses/<int:course_id>/overview",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/overview",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "courses",
-                "{{course_id}}",
-                "overview"
-              ]
-            },
-            "description": "→ {data: [{project_id, name, percent_done, overdue, risks}]} cho mọi dự án trong lớp."
+              "raw": "{\n  \"status\": \"in_progress\"\n}"
+            }
           }
         },
         {
-          "name": "GET /api/projects/<int:project_id>/activity",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/activity",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "activity"
-              ]
-            },
-            "description": "Query: ?limit=20 → {data: [task_history mới nhất của dự án]}."
-          }
-        },
-        {
-          "name": "GET /api/projects/<int:project_id>/members/stats",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/members/stats",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "members",
-                "stats"
-              ]
-            },
-            "description": "→ {data: [{user_id, full_name, assigned, done, on_time, late, returned, attachments}]}."
-          }
-        },
-        {
-          "name": "GET /api/projects/<int:project_id>/peer-reviews",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/peer-reviews",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "peer-reviews"
-              ]
-            },
-            "description": "Trưởng nhóm/GV: tổng hợp điểm theo reviewee (ẩn reviewer). Thành viên: chỉ các đánh giá mình đã gửi."
-          }
-        },
-        {
-          "name": "POST /api/projects/<int:project_id>/peer-reviews",
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -1001,85 +1994,1038 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/peer-reviews",
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Gửi nghiệm thu lại",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{ms_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{ms_id}}",
+                "submit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập gv",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"gv_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gv@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Giám sát nghiệm thu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"đã nghiệm thu\", () => pm.expect(pm.response.json().data.status === \"accepted\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{ms_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{ms_id}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"accept\",\n  \"note\": \"Đạt\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. M17 — Dashboard, cảnh báo, đóng góp",
+      "item": [
+        {
+          "name": "Đăng nhập sv2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv2_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv2@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Thống kê dự án",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"1 việc xong, 3 điểm\", () => pm.expect(pm.response.json().data.by_status.done === 1 && pm.response.json().data.points_done === 3).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/stats",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "projects",
-                "{{project_id}}",
+                "{{pid}}",
+                "stats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Việc có nguy cơ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/risks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "risks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đèn sức khỏe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"có level hợp lệ\", () => pm.expect([\"green\",\"yellow\",\"red\"].includes(pm.response.json().data.level)).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sổ đóng góp (thành viên)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"thành viên không thấy điểm đánh giá chéo\", () => pm.expect(pm.response.json().data.every(r => !(\"peer_score\" in r))).to.be.true);",
+                  "pm.test(\"sv2 bị trả lại 1 lần\", () => pm.expect(pm.response.json().data.find(r => r.user.email === \"sv2@teamsync.local\").returned === 1).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/contributions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "contributions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tự đánh giá mình",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/peer-reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
                 "peer-reviews"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
-            },
-            "description": "Body: {reviewee_id, score 1..5, comment?}. Không tự đánh giá mình; trùng → 409."
+              "raw": "{\n  \"reviewee_id\": {{sv2_id}},\n  \"score\": 5\n}"
+            }
           }
         },
         {
-          "name": "GET /api/projects/<int:project_id>/report",
+          "name": "sv2 đánh giá sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/report",
+              "raw": "{{base_url}}/api/projects/{{pid}}/peer-reviews",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "projects",
-                "{{project_id}}",
+                "{{pid}}",
+                "peer-reviews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewee_id\": {{sv1_id}},\n  \"score\": 5,\n  \"comment\": \"Phân công rõ ràng\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Đánh giá trùng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = ALREADY_REVIEWED\", () => pm.expect(pm.response.json().error.code).to.eql(\"ALREADY_REVIEWED\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/peer-reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "peer-reviews"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewee_id\": {{sv1_id}},\n  \"score\": 4\n}"
+            }
+          }
+        },
+        {
+          "name": "Thành viên chạy đánh giá luật",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/risk-evaluation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "risk-evaluation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập gv",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"gv_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gv@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Giám sát xem tổng hợp đánh giá chéo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"sv1 trung bình 5\", () => pm.expect(pm.response.json().data.find(r => r.user.email === \"sv1@teamsync.local\").average === 5).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/peer-reviews",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "peer-reviews"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đánh giá luật cảnh báo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/risk-evaluation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "risk-evaluation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Hoạt động gần đây",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"10 dòng\", () => pm.expect(pm.response.json().data.length === 10).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/activity?limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập sv1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"sv1_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sv1@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Xuất CSV",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"là CSV\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/csv\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{pid}}/report",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{pid}}",
                 "report"
               ]
-            },
-            "description": "→ file CSV (text/csv) tổng hợp theo thành viên. Ngoại lệ duy nhất không trả JSON."
+            }
           }
         },
         {
-          "name": "GET /api/projects/<int:project_id>/risks",
+          "name": "Tổng quan workspace (chủ)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"1 dự án\", () => pm.expect(pm.response.json().data.length === 1).to.be.true);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/risks",
+              "raw": "{{base_url}}/api/workspaces/{{ws_id}}/overview",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "projects",
-                "{{project_id}}",
-                "risks"
+                "workspaces",
+                "{{ws_id}}",
+                "overview"
               ]
-            },
-            "description": "→ {data: [{task_id, title, assignee_id, due_date, reasons: [\"NEAR_DUE_NOT_STARTED\"|\"OVERDUE\"|\"STALE\"]}]}."
-          }
-        },
-        {
-          "name": "GET /api/projects/<int:project_id>/stats",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/stats",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "projects",
-                "{{project_id}}",
-                "stats"
-              ]
-            },
-            "description": "→ {data: {total, by_status: {todo, in_progress, review, done}, percent_done, overdue, on_time_rate}}."
+            }
           }
         }
       ]
+    },
+    {
+      "name": "4. Quản trị",
+      "item": [
+        {
+          "name": "Người dùng gọi API admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng nhập admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"admin_id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@teamsync.local\",\n  \"password\": \"123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Lọc người dùng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users?role=user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "user"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin tự khóa mình",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error.code = CANNOT_MODIFY_SELF\", () => pm.expect(pm.response.json().error.code).to.eql(\"CANNOT_MODIFY_SELF\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Giám sát mọi dự án",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "projects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ẩn bình luận vi phạm",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"nội dung bị ẩn\", () => pm.expect(pm.response.json().data.content === \"[Nội dung đã bị ẩn]\").to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/comments/{{comment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "comments",
+                "{{comment_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_hidden\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Thêm mẫu dự án",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"new_tpl\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "templates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mẫu Postman {{$timestamp}}\",\n  \"milestones\": [\n    {\n      \"title\": \"Giai đoạn 1\",\n      \"offset_days\": 7\n    }\n  ],\n  \"tasks\": [\n    {\n      \"title\": \"Việc đầu tiên\",\n      \"milestone\": \"Giai đoạn 1\",\n      \"points\": 2\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Xóa mẫu vừa thêm",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/templates/{{new_tpl}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "templates",
+                "{{new_tpl}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Đăng xuất",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sau khi đăng xuất → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error.code = UNAUTHORIZED\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:5000"
     }
   ]
 }

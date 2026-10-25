@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Giám sát dự án — TeamSync{% endblock %}
+{% block title %}Giám sát dự án{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Tất cả dự án</h1>
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('m20_pages.admin_users') }}">Người dùng</a>
-</div>
-<table class="table align-middle">
-  <thead><tr><th>ID</th><th>Dự án</th><th>Lớp</th><th>Trưởng nhóm</th><th class="text-end">Thành viên</th><th class="text-end">Nhiệm vụ</th><th>Hạn</th></tr></thead>
+<h1 class="h4">Quản trị</h1>
+{% set atab = 'projects' %}{% include 'm20/_admin_nav.html' %}
+<div class="card p-3"><table class="table align-middle mb-0">
+  <thead><tr><th>ID</th><th>Dự án</th><th>Không gian</th><th>Quản lý</th><th class="text-end">Người</th><th class="text-end">Việc</th><th>Hạn</th></tr></thead>
   <tbody id="projects-body"></tbody>
-</table>
+</table></div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

@@ -146,8 +146,37 @@
       ]
     },
     {
-      "name": "M20 — Tài khoản & phân quyền",
+      "name": "M20 — Tài khoản, workspace, phân quyền",
       "item": [
+        {
+          "name": "PATCH /api/admin/comments/<int:comment_id>",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/comments/{{comment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "comments",
+                "{{comment_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Body: {is_hidden: bool} — ẩn/hiện bình luận vi phạm."
+          }
+        },
         {
           "name": "GET /api/admin/projects",
           "request": {
@@ -164,7 +193,82 @@
                 "projects"
               ]
             },
-            "description": "→ 200 {data: [project + số thành viên + số task]}."
+            "description": "→ [project + workspace_name + manager + member_count + task_count]."
+          }
+        },
+        {
+          "name": "POST /api/admin/templates",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "templates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Body: {name, description?, milestones: [{title, offset_days}], tasks: [{title, milestone?, points?, offset_days?}]}."
+          }
+        },
+        {
+          "name": "PATCH /api/admin/templates/<int:template_id>",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/templates/{{template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "templates",
+                "{{template_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/templates/<int:template_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/templates/{{template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "templates",
+                "{{template_id}}"
+              ]
+            }
           }
         },
         {
@@ -183,7 +287,7 @@
                 "users"
               ]
             },
-            "description": "Query: ?q=&role=&is_active= → 200 {data: [user...]}."
+            "description": "Query: ?q=&role=admin|user&is_active=true|false → [user]."
           }
         },
         {
@@ -212,7 +316,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {role?, is_active?} → 200 {data: user}. Không tự khóa chính mình."
+            "description": "Body: {role?: admin|user, is_active?: bool}. Không tự sửa chính mình."
           }
         },
         {
@@ -342,7 +446,45 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {email, password, full_name} → 201 {data: user}. Tài khoản mới luôn là student."
+            "description": "Body: {email, password, full_name} → 201 {data: user}. Tài khoản mới luôn là 'user'."
+          }
+        },
+        {
+          "name": "DELETE /api/invitations/<int:invitation_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{invitation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "invitations",
+                "{{invitation_id}}"
+              ]
+            },
+            "description": "Quản lý hủy lời mời đang chờ."
+          }
+        },
+        {
+          "name": "GET /api/invitations/<token>",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invitations/{{token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "invitations",
+                "{{token}}"
+              ]
+            },
+            "description": "Thông tin lời mời để hiển thị trang nhận lời mời."
           }
         },
         {
@@ -400,7 +542,27 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm. Body: {email} → 201 {data: invitation}. Dùng check_project_access(project_id, leader=True)."
+            "description": "Chỉ quản lý. Body: {email, project_role?: member|supervisor} → 201 {data: invitation + accept_url}.\nGhi chú: chưa gửi email thật — quản lý copy accept_url gửi cho người được mời."
+          }
+        },
+        {
+          "name": "GET /api/projects/<int:project_id>/invitations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/invitations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "invitations"
+              ]
+            },
+            "description": "Chỉ quản lý → lời mời đang chờ."
           }
         },
         {
@@ -420,7 +582,7 @@
                 "members"
               ]
             },
-            "description": "→ 200 {data: [member...]}."
+            "description": "→ [member], thứ tự: quản lý, thành viên, giám sát."
           }
         },
         {
@@ -450,7 +612,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm. Body: {project_role}. Chuyển 'leader' cho người khác thì mình thành 'member'."
+            "description": "Chỉ quản lý. Body: {project_role: manager|member|supervisor}.\nChuyển 'manager' cho người khác thì quản lý cũ thành 'member'. Dự án luôn có đúng 1 quản lý."
           }
         },
         {
@@ -471,34 +633,29 @@
                 "{{user_id}}"
               ]
             },
-            "description": "Chỉ trưởng nhóm; không xóa chính trưởng nhóm. → 200."
+            "description": "Chỉ quản lý; không xóa quản lý; người còn việc chưa xong phải được giao lại trước."
           }
-        }
-      ]
-    },
-    {
-      "name": "M10 — LMS (lớp, dự án, nhiệm vụ)",
-      "item": [
+        },
         {
-          "name": "GET /api/courses",
+          "name": "GET /api/workspaces",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/courses",
+              "raw": "{{base_url}}/api/workspaces",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "courses"
+                "workspaces"
               ]
             },
-            "description": "GV: lớp mình dạy; SV: lớp có dự án mình tham gia; admin: tất cả → 200 {data: [course]}."
+            "description": "Workspace mình sở hữu hoặc là thành viên (admin: tất cả). Kèm my_role và project_count."
           }
         },
         {
-          "name": "POST /api/courses",
+          "name": "POST /api/workspaces",
           "request": {
             "method": "POST",
             "header": [
@@ -508,43 +665,108 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/courses",
+              "raw": "{{base_url}}/api/workspaces",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "courses"
+                "workspaces"
               ]
             },
             "body": {
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {code, name} → 201 {data: course}."
+            "description": "Body: {name, description?} → 201. Người tạo là chủ (owner)."
           }
         },
         {
-          "name": "GET /api/courses/<int:course_id>/projects",
+          "name": "GET /api/workspaces/<int:workspace_id>",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/projects",
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "courses",
-                "{{course_id}}",
-                "projects"
+                "workspaces",
+                "{{workspace_id}}"
               ]
             }
           }
         },
         {
-          "name": "POST /api/courses/<int:course_id>/projects",
+          "name": "PATCH /api/workspaces/<int:workspace_id>",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Chỉ chủ workspace. Body: {name?, description?}."
+          }
+        },
+        {
+          "name": "DELETE /api/workspaces/<int:workspace_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}"
+              ]
+            },
+            "description": "Chỉ chủ workspace; chỉ xóa được khi không còn dự án."
+          }
+        },
+        {
+          "name": "GET /api/workspaces/<int:workspace_id>/members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}",
+                "members"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/workspaces/<int:workspace_id>/members",
           "request": {
             "method": "POST",
             "header": [
@@ -554,22 +776,190 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/projects",
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "courses",
-                "{{course_id}}",
-                "projects"
+                "workspaces",
+                "{{workspace_id}}",
+                "members"
               ]
             },
             "body": {
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {name, description?, due_date?} → 201 {data: project}.\nSau khi tạo: m20_accounts.services.add_member(project.id, user.id, \"leader\")."
+            "description": "Chỉ chủ workspace. Body: {email} — người đó phải đã có tài khoản."
+          }
+        },
+        {
+          "name": "DELETE /api/workspaces/<int:workspace_id>/members/<int:user_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}",
+                "members",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Chỉ chủ workspace; không xóa chủ; người còn trong dự án của workspace phải rời dự án trước."
+          }
+        }
+      ]
+    },
+    {
+      "name": "M06 — Dự án, cột mốc, nhiệm vụ",
+      "item": [
+        {
+          "name": "GET /api/attachments/<int:attachment_id>/download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/attachments/{{attachment_id}}/download",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "attachments",
+                "{{attachment_id}}",
+                "download"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/milestones/<int:milestone_id>",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{milestone_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{milestone_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Chỉ quản lý. Body: {title?, description?, due_date?}. Cột mốc đã nghiệm thu thì không sửa."
+          }
+        },
+        {
+          "name": "DELETE /api/milestones/<int:milestone_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{milestone_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{milestone_id}}"
+              ]
+            },
+            "description": "Chỉ quản lý. Các việc thuộc cột mốc được giữ lại, chỉ bỏ liên kết."
+          }
+        },
+        {
+          "name": "POST /api/milestones/<int:milestone_id>/review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{milestone_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{milestone_id}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Giám sát nghiệm thu. Body: {action: accept|request_changes, note}. request_changes bắt buộc note.\nDự án chưa có giám sát thì quản lý được tự nghiệm thu."
+          }
+        },
+        {
+          "name": "POST /api/milestones/<int:milestone_id>/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/milestones/{{milestone_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "milestones",
+                "{{milestone_id}}",
+                "submit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Quản lý gửi nghiệm thu. Mọi việc của cột mốc phải done."
+          }
+        },
+        {
+          "name": "GET /api/projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects"
+              ]
+            },
+            "description": "Mọi dự án mình tham gia (admin: tất cả), kèm my_role."
           }
         },
         {
@@ -615,7 +1005,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm. Body: {name?, description?, due_date?}."
+            "description": "Chỉ quản lý. Body: {name?, description?, start_date?, due_date?}."
           }
         },
         {
@@ -634,7 +1024,56 @@
                 "{{project_id}}"
               ]
             },
-            "description": "Chỉ trưởng nhóm / admin."
+            "description": "Chỉ quản lý / admin. Xóa luôn cột mốc, việc, lịch sử, thành viên của dự án."
+          }
+        },
+        {
+          "name": "GET /api/projects/<int:project_id>/milestones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/milestones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "milestones"
+              ]
+            },
+            "description": "→ [milestone + task_count + done_count]."
+          }
+        },
+        {
+          "name": "POST /api/projects/<int:project_id>/milestones",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/milestones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "milestones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Chỉ quản lý. Body: {title, description?, due_date?} → 201."
           }
         },
         {
@@ -654,7 +1093,7 @@
                 "tasks"
               ]
             },
-            "description": "Query: ?status=&assignee_id=&due=overdue|today|week → 200 {data: [task]}."
+            "description": "Query: ?status=&assignee_id=&milestone_id=&due=overdue|today|week → [task + blocked]."
           }
         },
         {
@@ -683,7 +1122,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm. Body: {title, description?, priority?, due_date?, assignee_id?} → 201.\nassignee_id phải là thành viên dự án. Ghi log_history(task, \"created\")."
+            "description": "Chỉ quản lý. Body: {title, description?, priority?, points?, due_date?, assignee_id?, milestone_id?} → 201."
           }
         },
         {
@@ -701,7 +1140,8 @@
                 "tasks",
                 "{{task_id}}"
               ]
-            }
+            },
+            "description": "→ task + attachments + depends_on + blocked + my_role."
           }
         },
         {
@@ -729,7 +1169,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm. Body: {title?, description?, priority?, due_date?, assignee_id?}."
+            "description": "Chỉ quản lý. Body: {title?, description?, priority?, points?, due_date?, assignee_id?, milestone_id?}.\nĐổi người nhận, hạn, điểm đều được ghi lịch sử."
           }
         },
         {
@@ -776,7 +1216,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "multipart/form-data field 'file' HOẶC JSON {url} → 201 {data: attachment}. Chỉ pdf, png, jpg, docx, zip."
+            "description": "Người được giao hoặc quản lý. multipart/form-data field 'file' HOẶC JSON {url} → 201."
           }
         },
         {
@@ -824,7 +1264,56 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {content} → 201."
+            "description": "Mọi người trong dự án (cả giám sát). Body: {content} → 201."
+          }
+        },
+        {
+          "name": "POST /api/tasks/<int:task_id>/dependencies",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}/dependencies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_id}}",
+                "dependencies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Chỉ quản lý. Body: {depends_on_id} — cùng dự án, không tự phụ thuộc, không tạo vòng."
+          }
+        },
+        {
+          "name": "DELETE /api/tasks/<int:task_id>/dependencies/<int:depends_on_id>",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}/dependencies/{{depends_on_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{task_id}}",
+                "dependencies",
+                "{{depends_on_id}}"
+              ]
+            }
           }
         },
         {
@@ -872,7 +1361,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Chỉ trưởng nhóm, task đang 'review'. Body: {action: approve|return, note}. return bắt buộc note."
+            "description": "Chỉ quản lý, task đang 'review'. Body: {action: approve|return, note}. return bắt buộc note."
           }
         },
         {
@@ -901,34 +1390,80 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Người được giao hoặc trưởng nhóm. Body: {status: todo|in_progress|review, note?}.\nKhông cho set 'done' ở đây — 'done' chỉ đi qua /review. Sai luồng → 409 INVALID_TRANSITION."
+            "description": "Người được giao hoặc quản lý. Body: {status: todo|in_progress|review, note?}.\n'done' chỉ đi qua /review. Sai luồng → 409 INVALID_TRANSITION."
           }
-        }
-      ]
-    },
-    {
-      "name": "M11 — Phân tích học tập",
-      "item": [
+        },
         {
-          "name": "GET /api/courses/<int:course_id>/overview",
+          "name": "GET /api/templates",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/courses/{{course_id}}/overview",
+              "raw": "{{base_url}}/api/templates",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "courses",
-                "{{course_id}}",
-                "overview"
+                "templates"
               ]
-            },
-            "description": "→ {data: [{project_id, name, percent_done, overdue, risks}]} cho mọi dự án trong lớp."
+            }
           }
         },
+        {
+          "name": "GET /api/workspaces/<int:workspace_id>/projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}",
+                "projects"
+              ]
+            },
+            "description": "Chủ workspace/admin thấy mọi dự án; thành viên chỉ thấy dự án mình tham gia."
+          }
+        },
+        {
+          "name": "POST /api/workspaces/<int:workspace_id>/projects",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/projects",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}",
+                "projects"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Thành viên workspace. Body: {name, description?, start_date?, due_date?, template_id?} → 201.\nNgười tạo thành quản lý (add_member của M20); nếu có template_id thì tạo sẵn cột mốc và việc."
+          }
+        }
+      ]
+    },
+    {
+      "name": "M17 — Dashboard, báo cáo, đánh giá",
+      "item": [
         {
           "name": "GET /api/projects/<int:project_id>/activity",
           "request": {
@@ -946,16 +1481,16 @@
                 "activity"
               ]
             },
-            "description": "Query: ?limit=20 → {data: [task_history mới nhất của dự án]}."
+            "description": "Query: ?limit=20 (tối đa 100) → lịch sử mới nhất của dự án."
           }
         },
         {
-          "name": "GET /api/projects/<int:project_id>/members/stats",
+          "name": "GET /api/projects/<int:project_id>/contributions",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/projects/{{project_id}}/members/stats",
+              "raw": "{{base_url}}/api/projects/{{project_id}}/contributions",
               "host": [
                 "{{base_url}}"
               ],
@@ -963,11 +1498,30 @@
                 "api",
                 "projects",
                 "{{project_id}}",
-                "members",
-                "stats"
+                "contributions"
               ]
             },
-            "description": "→ {data: [{user_id, full_name, assigned, done, on_time, late, returned, attachments}]}."
+            "description": "Sổ đóng góp. Điểm đánh giá chéo chỉ hiện với quản lý, giám sát, admin."
+          }
+        },
+        {
+          "name": "GET /api/projects/<int:project_id>/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "health"
+              ]
+            },
+            "description": "→ {level: green|yellow|red, reasons, overdue_count, risk_count, late_milestones}."
           }
         },
         {
@@ -987,7 +1541,7 @@
                 "peer-reviews"
               ]
             },
-            "description": "Trưởng nhóm/GV: tổng hợp điểm theo reviewee (ẩn reviewer). Thành viên: chỉ các đánh giá mình đã gửi."
+            "description": "Quản lý/giám sát/admin: tổng hợp theo người được đánh giá (ẩn người chấm). Thành viên: các đánh giá mình đã gửi."
           }
         },
         {
@@ -1016,7 +1570,7 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Body: {reviewee_id, score 1..5, comment?}. Không tự đánh giá mình; trùng → 409."
+            "description": "Quản lý hoặc thành viên. Body: {reviewee_id, score 1..5, comment?}. Không tự đánh giá; trùng → 409."
           }
         },
         {
@@ -1036,7 +1590,27 @@
                 "report"
               ]
             },
-            "description": "→ file CSV (text/csv) tổng hợp theo thành viên. Ngoại lệ duy nhất không trả JSON."
+            "description": "→ file CSV sổ đóng góp (text/csv, UTF-8 có BOM để Excel đọc đúng tiếng Việt)."
+          }
+        },
+        {
+          "name": "GET /api/projects/<int:project_id>/risk-evaluation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/risk-evaluation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "{{project_id}}",
+                "risk-evaluation"
+              ]
+            },
+            "description": "Quản lý/giám sát/admin: chạy lại luật cảnh báo trên lịch sử dự án → recall, số ngày cảnh báo sớm, cảnh báo thừa."
           }
         },
         {
@@ -1056,7 +1630,7 @@
                 "risks"
               ]
             },
-            "description": "→ {data: [{task_id, title, assignee_id, due_date, reasons: [\"NEAR_DUE_NOT_STARTED\"|\"OVERDUE\"|\"STALE\"]}]}."
+            "description": "→ [{task_id, title, status, due_date, assignee, reasons: [{code, label, detail}]}]."
           }
         },
         {
@@ -1076,7 +1650,27 @@
                 "stats"
               ]
             },
-            "description": "→ {data: {total, by_status: {todo, in_progress, review, done}, percent_done, overdue, on_time_rate}}."
+            "description": "→ total, by_status, percent_done, points_total/done, percent_points, overdue, on_time_rate, by_milestone."
+          }
+        },
+        {
+          "name": "GET /api/workspaces/<int:workspace_id>/overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/workspaces/{{workspace_id}}/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workspaces",
+                "{{workspace_id}}",
+                "overview"
+              ]
+            },
+            "description": "Chủ workspace/admin: tiến độ và sức khỏe mọi dự án trong workspace."
           }
         }
       ]

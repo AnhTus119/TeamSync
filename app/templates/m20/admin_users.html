@@ -1,22 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Quản trị người dùng — TeamSync{% endblock %}
+{% block title %}Quản trị người dùng{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Quản trị người dùng</h1>
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('m20_pages.admin_projects') }}">Danh sách dự án</a>
-</div>
+<h1 class="h4">Quản trị</h1>
+{% set atab = 'users' %}{% include 'm20/_admin_nav.html' %}
 <form id="user-filter" class="row g-2 mb-3">
   <div class="col-md-5"><input class="form-control" name="q" placeholder="Tìm theo tên hoặc email"></div>
-  <div class="col-md-3"><select class="form-select" name="role">
-    <option value="">Mọi vai trò</option><option value="admin">admin</option>
-    <option value="lecturer">lecturer</option><option value="student">student</option></select></div>
-  <div class="col-md-2"><select class="form-select" name="is_active">
-    <option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Đã khóa</option></select></div>
+  <div class="col-md-3"><select class="form-select" name="role"><option value="">Mọi vai trò</option><option value="admin">Quản trị viên</option><option value="user">Người dùng</option></select></div>
+  <div class="col-md-2"><select class="form-select" name="is_active"><option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Đã khóa</option></select></div>
   <div class="col-md-2"><button class="btn btn-outline-primary w-100">Lọc</button></div>
 </form>
-<table class="table align-middle">
+<div class="card p-3"><table class="table align-middle mb-0">
   <thead><tr><th>ID</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr></thead>
   <tbody id="users-body"></tbody>
-</table>
+</table></div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}
