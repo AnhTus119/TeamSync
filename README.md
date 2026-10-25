@@ -52,7 +52,8 @@ Dự án demo có sẵn đủ tình huống: việc đã duyệt, việc bị tr
 ```bat
 python tests/smoke.py        :: bắt buộc trước mỗi Pull Request
 python tests/test_m20.py
-:: TV2 thêm tests/test_m06.py, TV3 thêm tests/test_m17.py khi làm module
+python tests/test_m06.py
+python tests/test_m17.py
 ```
 Postman: import `tests/postman/TeamSync.skeleton.postman_collection.json` + `TeamSync.postman_environment.json` (mỗi endpoint một request). Endpoint chưa cài đặt trả 501.
 TV3 xây collection luồng nghiệp vụ đầy đủ có kiểm tra tự động.
