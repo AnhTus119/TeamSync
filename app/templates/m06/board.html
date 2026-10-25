@@ -2,7 +2,32 @@
 {% block title %}Kanban{% endblock %}
 {% block content %}
 {% set tab = 'board' %}{% include '_project_nav.html' %}
-<h1 class="h4">Kanban</h1>
-<p class="text-muted">TODO: chủ module M06 xây trang này (xem docs/M06.md). Lấy dữ liệu bằng api() trong static/js/m06.js.</p>
+<div id="board-page" data-project-id="{{ project_id }}"></div>
+<form id="task-filter" class="row g-2 mb-3">
+  <div class="col-md-3"><select class="form-select form-select-sm" name="assignee_id" id="f-assignee"><option value="">Mọi người</option></select></div>
+  <div class="col-md-3"><select class="form-select form-select-sm" name="milestone_id" id="f-milestone"><option value="">Mọi cột mốc</option></select></div>
+  <div class="col-md-3"><select class="form-select form-select-sm" name="due"><option value="">Mọi hạn</option><option value="overdue">Quá hạn</option><option value="today">Hôm nay</option><option value="week">7 ngày tới</option></select></div>
+  <div class="col-md-3 text-end"><button type="button" class="btn btn-sm btn-primary d-none" id="new-task-btn">+ Việc mới</button></div>
+</form>
+<form id="new-task" class="card p-3 mb-3 d-none">
+  <div class="row g-2">
+    <div class="col-md-6"><input class="form-control" name="title" placeholder="Tên việc" required></div>
+    <div class="col-md-3"><select class="form-select" name="assignee_id" id="nt-assignee"><option value="">Chưa giao</option></select></div>
+    <div class="col-md-3"><select class="form-select" name="milestone_id" id="nt-milestone"><option value="">Không thuộc cột mốc</option></select></div>
+    <div class="col-12"><textarea class="form-control" name="description" rows="2" placeholder="Mô tả"></textarea></div>
+    <div class="col-md-3"><label class="small">Hạn</label><input class="form-control" type="date" name="due_date"></div>
+    <div class="col-md-3"><label class="small">Ưu tiên</label><select class="form-select" name="priority"><option value="low">Thấp</option><option value="medium" selected>Trung bình</option><option value="high">Cao</option></select></div>
+    <div class="col-md-3"><label class="small">Điểm khối lượng</label><select class="form-select" name="points"><option>1</option><option>2</option><option selected>3</option><option>5</option></select></div>
+    <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100">Tạo việc</button></div>
+  </div>
+</form>
+<div class="row g-3" id="kanban">
+  {% for s, name in [('todo','Cần làm'),('in_progress','Đang làm'),('review','Chờ duyệt'),('done','Hoàn thành')] %}
+  <div class="col-md-3"><div class="m06-col p-2">
+    <div class="fw-semibold small px-1 mb-2">{{ name }} <span class="text-muted" id="count-{{ s }}"></span></div>
+    <div id="col-{{ s }}"></div>
+  </div></div>
+  {% endfor %}
+</div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m06.js') }}"></script>{% endblock %}
