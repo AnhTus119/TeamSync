@@ -1,8 +1,79 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/m17.css') }}">
 {% set tab = 'dashboard' %}{% include '_project_nav.html' %}
-<h1 class="h4">Dashboard</h1>
-<p class="text-muted">TODO: chủ module M17 xây trang này (xem docs/M17.md). Lấy dữ liệu bằng api() trong static/js/m17.js.</p>
+
+<div id="m17-dashboard" class="m17-page" data-project-id="{{ project_id }}">
+  <div id="m17-error" class="alert alert-danger" hidden></div>
+
+  <!-- Đèn sức khỏe -->
+  <section id="m17-hero" class="m17-hero mb-4" aria-live="polite">
+    <div class="m17-skel h-lg w-100"></div>
+  </section>
+
+  <!-- KPI -->
+  <div id="m17-kpis" class="row g-3 mb-4">
+    {% for _ in range(5) %}<div class="col-6 col-lg"><div class="m17-card"><div class="m17-skel h-md"></div></div></div>{% endfor %}
+  </div>
+
+  <!-- Biểu đồ -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-pie-chart"></i>Việc theo trạng thái</h2></div>
+        <div class="m17-donut-wrap"><canvas id="m17-status-chart" aria-label="Biểu đồ việc theo trạng thái" role="img"></canvas>
+          <div class="m17-donut-center"><b id="m17-donut-total">–</b><span>việc</span></div></div>
+        <div id="m17-status-legend" class="m17-legend"></div>
+      </div>
+    </div>
+    <div class="col-lg-8">
+      <div class="m17-card">
+        <div class="m17-card-head">
+          <h2 class="m17-card-title"><i class="bi bi-graph-up-arrow"></i>Tiến độ: kế hoạch so với thực tế (điểm khối lượng)</h2>
+          <span class="m17-pill blue" id="m17-timeline-pill"></span>
+        </div>
+        <div class="m17-chart"><canvas id="m17-timeline-chart" aria-label="Biểu đồ tiến độ theo thời gian" role="img"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-flag"></i>Tiến độ theo cột mốc</h2>
+          <span class="m17-pill" id="m17-ms-pill"></span></div>
+        <div id="m17-milestones"><div class="m17-skel h-md"></div></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-people"></i>Khối lượng theo thành viên (điểm)</h2></div>
+        <div class="m17-chart"><canvas id="m17-workload-chart" aria-label="Biểu đồ khối lượng theo thành viên" role="img"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rủi ro + hoạt động -->
+  <div class="row g-3">
+    <div class="col-xl-7">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-exclamation-triangle"></i>Việc có nguy cơ trễ hạn</h2>
+          <span class="m17-pill" id="m17-risk-pill"></span></div>
+        <div id="m17-risks"><div class="m17-skel h-md"></div><div class="m17-skel h-md"></div></div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-clock-history"></i>Hoạt động gần đây</h2></div>
+        <div id="m17-activity"><div class="m17-skel h-md"></div><div class="m17-skel h-md"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/m17.js') }}"></script>{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/m17.js') }}"></script>
+{% endblock %}
