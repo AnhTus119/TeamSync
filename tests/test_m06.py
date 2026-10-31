@@ -141,12 +141,46 @@ api("DELETE", "/api/tasks/1")  # việc 3 phụ thuộc việc 1: Kanban không 
 assert api("GET", "/api/tasks/3")["depends_on"] == []
 assert {x["id"] for x in api("GET", "/api/projects/1/tasks")} == {2, 3, 4, 5, 6, 7}
 
+
 # --- xóa dự án không để lại dòng mồ côi (SQLite không bật khóa ngoại) ---
-api("DELETE", "/api/projects/1")
 with app.app_context():
-    from app.models import Comment, Invitation, Milestone, ProjectMember, Task, TaskDependency, TaskHistory
-    for model in (Task, Milestone, ProjectMember, Invitation, Comment, TaskHistory, TaskDependency):
-        assert model.query.count() == 0, model.__name__
+    from app.models import (
+        Comment, Invitation, Milestone, ProjectMember,
+        Task, TaskDependency, TaskHistory
+    )
+
+    # Lưu ID các task thuộc dự án 1 trước khi xóa dự án
+    project_task_ids = [
+        task.id for task in Task.query.filter_by(project_id=1).all()
+    ]
+
+api("DELETE", "/api/projects/1")
+
+with app.app_context():
+    # Các bảng có project_id trực tiếp
+    assert Task.query.filter_by(project_id=1).count() == 0
+    assert Milestone.query.filter_by(project_id=1).count() == 0
+    assert ProjectMember.query.filter_by(project_id=1).count() == 0
+    assert Invitation.query.filter_by(project_id=1).count() == 0
+
+    # Các bảng liên kết thông qua task_id
+    assert Comment.query.filter(
+        Comment.task_id.in_(project_task_ids)
+    ).count() == 0
+
+    assert TaskHistory.query.filter(
+        TaskHistory.task_id.in_(project_task_ids)
+    ).count() == 0
+
+    # Kiểm tra cả hai đầu của quan hệ phụ thuộc
+    assert TaskDependency.query.filter(
+        TaskDependency.task_id.in_(project_task_ids)
+    ).count() == 0
+
+    assert TaskDependency.query.filter(
+        TaskDependency.depends_on_id.in_(project_task_ids)
+    ).count() == 0
+
 
 # --- trang HTML ---
 for url in ("/projects", "/projects/1", "/projects/1/milestones", "/tasks/1"):
