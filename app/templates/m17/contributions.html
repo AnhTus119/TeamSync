@@ -1,8 +1,86 @@
 {% extends "base.html" %}
 {% block title %}Sổ đóng góp{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/m17.css') }}">
 {% set tab = 'contributions' %}{% include '_project_nav.html' %}
-<h1 class="h4">Sổ đóng góp</h1>
-<p class="text-muted">TODO: chủ module M17 xây trang này (xem docs/M17.md). Lấy dữ liệu bằng api() trong static/js/m17.js.</p>
+
+<div id="m17-contributions" class="m17-page" data-project-id="{{ project_id }}">
+  <div id="m17-error" class="alert alert-danger" hidden></div>
+
+  <!-- Sổ đóng góp -->
+  <div class="m17-card mb-4">
+    <div class="m17-card-head">
+      <div>
+        <h2 class="m17-card-title"><i class="bi bi-journal-check"></i>Sổ đóng góp theo thành viên</h2>
+        <div class="m17-cell-sub mt-1">Số liệu thật từ nhiệm vụ và lịch sử. Không quy thành một điểm xếp hạng.</div>
+      </div>
+      <a class="m17-btn primary" id="m17-export" href="/api/projects/{{ project_id }}/report"><i class="bi bi-download"></i>Xuất CSV</a>
+    </div>
+    <div class="m17-scroll">
+      <table class="m17-table">
+        <thead><tr>
+          <th>Thành viên</th><th>Việc xong / được giao</th><th>Điểm xong / được giao</th>
+          <th>Đúng hạn</th><th class="text-center">Bị trả lại</th><th class="text-center">Minh chứng</th><th>Đánh giá chéo</th>
+        </tr></thead>
+        <tbody id="m17-ledger"><tr><td colspan="7"><div class="m17-skel h-md"></div></td></tr></tbody>
+      </table>
+    </div>
+    <div class="m17-note mt-3"><i class="bi bi-info-circle"></i><span>Tỷ lệ đúng hạn = việc xong đúng hạn / (việc đã xong có hạn + việc đang quá hạn). Điểm đánh giá chéo chỉ quản lý, giám sát và quản trị viên xem được.</span></div>
+  </div>
+
+  <!-- Đánh giá chéo -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-5" id="m17-peer-form-col" hidden>
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-star"></i>Đánh giá đồng đội</h2>
+          <span class="m17-pill blue"><i class="bi bi-incognito"></i>Ẩn danh</span></div>
+        <form id="m17-peer-form" novalidate>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="m17-reviewee">Người được đánh giá</label>
+            <select id="m17-reviewee" class="form-select" required></select>
+          </div>
+          <div class="mb-3">
+            <div class="form-label small fw-semibold">Điểm (1–5)</div>
+            <div class="m17-stars" id="m17-stars" role="radiogroup" aria-label="Chọn điểm từ 1 đến 5"></div>
+            <div class="m17-score-hint" id="m17-score-hint">Chọn số sao</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="m17-comment">Nhận xét (không bắt buộc)</label>
+            <textarea id="m17-comment" class="form-control" rows="3" maxlength="1000" placeholder="Điều làm tốt, điều cần cải thiện…"></textarea>
+          </div>
+          <button class="m17-btn primary w-100 justify-content-center" type="submit" id="m17-submit-review"><i class="bi bi-send"></i>Gửi đánh giá</button>
+          <div class="m17-note mt-3"><i class="bi bi-shield-lock"></i><span>Mỗi người chỉ đánh giá một lần cho mỗi đồng đội, không tự chấm. Quản lý và giám sát chỉ thấy tổng hợp, không thấy ai đã chấm.</span></div>
+        </form>
+        <hr class="my-3">
+        <h3 class="h6 mb-2">Đánh giá bạn đã gửi</h3>
+        <div id="m17-mine"></div>
+      </div>
+    </div>
+    <div class="col" id="m17-peer-summary-col">
+      <div class="m17-card">
+        <div class="m17-card-head"><h2 class="m17-card-title"><i class="bi bi-chat-square-heart"></i>Tổng hợp đánh giá chéo</h2></div>
+        <div id="m17-peer-summary"><div class="m17-skel h-md"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chất lượng luật cảnh báo -->
+  <div class="m17-card" id="m17-eval-card" hidden>
+    <div class="m17-card-head">
+      <div>
+        <h2 class="m17-card-title"><i class="bi bi-bullseye"></i>Chất lượng luật cảnh báo</h2>
+        <div class="m17-cell-sub mt-1">Chạy lại luật từng ngày trên lịch sử dự án, từ lúc tạo việc tới trước hạn.</div>
+      </div>
+    </div>
+    <form id="m17-eval-form" class="row g-2 align-items-end mb-3">
+      <div class="col-6 col-md-3"><label class="form-label small mb-1" for="m17-th-due">Sắp tới hạn (ngày)</label><input id="m17-th-due" type="number" min="0" max="60" class="form-control form-control-sm"></div>
+      <div class="col-6 col-md-3"><label class="form-label small mb-1" for="m17-th-stale">Không cập nhật quá (ngày)</label><input id="m17-th-stale" type="number" min="0" max="60" class="form-control form-control-sm"></div>
+      <div class="col-6 col-md-3"><label class="form-label small mb-1" for="m17-th-ret">Bị trả lại ≥ (lần)</label><input id="m17-th-ret" type="number" min="0" max="60" class="form-control form-control-sm"></div>
+      <div class="col-6 col-md-3 d-flex gap-2"><button class="m17-btn primary flex-fill justify-content-center" type="submit"><i class="bi bi-play-fill"></i>Chạy đánh giá</button></div>
+    </form>
+    <div id="m17-eval"><div class="m17-skel h-md"></div></div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/m17.js') }}"></script>{% endblock %}

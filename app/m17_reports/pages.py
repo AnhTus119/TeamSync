@@ -14,3 +14,9 @@ def dashboard(project_id):
 @page_login_required
 def contributions(project_id):
     return render_template("m17/contributions.html", project_id=project_id)
+
+
+@pages_bp.get("/workspaces/<int:workspace_id>/overview")
+@page_login_required
+def workspace_overview(workspace_id):
+    return render_template("m17/overview.html", workspace_id=workspace_id)
