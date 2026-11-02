@@ -58,12 +58,13 @@ if ($("ws-page")) {
       <span>${esc(m.user.full_name)}<br><span class="small text-muted">${esc(m.user.email)}</span></span>
       ${m.role === "owner" ? '<span class="badge text-bg-primary">Chủ</span>'
         : isOwner ? `<button class="btn btn-sm btn-link text-danger" data-remove="${m.user.id}">Xóa</button>` : ""}</li>`).join("");
-    const overview = isOwner ? await api("GET", `/api/workspaces/${wid}/overview`).catch(() => []) : [];
-    const ov = Object.fromEntries(overview.map((o) => [o.project_id, o]));
+    // API tổng quan của M17 trả {workspace, totals, projects: [...]}; mỗi phần tử có project, health, stats
+    const overview = isOwner ? await api("GET", `/api/workspaces/${wid}/overview`).catch(() => null) : null;
+    const ov = Object.fromEntries(((overview && overview.projects) || []).map((o) => [o.project.id, o]));
     $("ws-projects").innerHTML = projects.map((p) => `<tr>
       <td><a href="/projects/${p.id}">${esc(p.name)}</a></td><td>${p.my_role ? label(p.my_role) : "—"}</td>
-      <td>${fmtDate(p.due_date)}</td><td>${ov[p.id] ? healthDot(ov[p.id].health) : ""}</td>
-      <td class="text-end">${ov[p.id] ? ov[p.id].percent_points + "%" : ""}</td></tr>`).join("")
+      <td>${fmtDate(p.due_date)}</td><td>${ov[p.id] ? healthDot(ov[p.id].health.level) : ""}</td>
+      <td class="text-end">${ov[p.id] ? ov[p.id].stats.percent_points + "%" : ""}</td></tr>`).join("")
       || '<tr><td colspan="5" class="text-muted">Chưa có dự án</td></tr>';
   }
 
