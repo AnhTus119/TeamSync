@@ -24,11 +24,28 @@ def not_implemented():
     return error("NOT_IMPLEMENTED", "Endpoint chưa được cài đặt", 501)
 
 
+def json_body():
+    """Body JSON dạng object (không có body → {}). Sai kiểu (mảng, chuỗi...) → 400, không để rơi thành 500."""
+    from flask import request
+    body = request.get_json(silent=True)
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        fail(400, "VALIDATION_ERROR", "Body phải là một JSON object")
+    return body
+
+
 def require_json(*fields):
     """Lấy body JSON và kiểm tra các trường bắt buộc. Thiếu → 400 VALIDATION_ERROR."""
     from flask import request
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        fail(400, "VALIDATION_ERROR", "Body phải là một JSON object")
     missing = [f for f in fields if body.get(f) in (None, "")]
     if missing:
         fail(400, "VALIDATION_ERROR", "Thiếu trường: " + ", ".join(missing))
+    # quy ước: trường không phải *_id hay score là chuỗi (code phía sau gọi .strip())
+    wrong = [f for f in fields if not f.endswith("_id") and f != "score" and not isinstance(body[f], str)]
+    if wrong:
+        fail(400, "VALIDATION_ERROR", "Phải là chuỗi: " + ", ".join(wrong))
     return body

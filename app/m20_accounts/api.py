@@ -4,7 +4,7 @@ import secrets
 
 from flask import request, session
 
-from ..common.responses import fail, ok, require_json
+from ..common.responses import fail, json_body, ok, require_json
 from ..extensions import db
 from ..models import (POINTS, PROJECT_ROLES, ROLES, Comment, Invitation, Project, ProjectMember,
                       ProjectTemplate, Task, User, Workspace, WorkspaceMember)
@@ -126,12 +126,14 @@ def get_workspace(workspace_id):
 def update_workspace(workspace_id):
     """Chỉ chủ workspace. Body: {name?, description?}."""
     ws = check_workspace_access(workspace_id, owner=True)
-    body = request.get_json(silent=True) or {}
+    body = json_body()
     if "name" in body:
-        if not str(body["name"]).strip():
+        if not isinstance(body["name"], str) or not body["name"].strip():
             fail(400, "VALIDATION_ERROR", "Tên không được để trống")
         ws.name = body["name"].strip()
     if "description" in body:
+        if body["description"] is not None and not isinstance(body["description"], str):
+            fail(400, "VALIDATION_ERROR", "description phải là chuỗi")
         ws.description = body["description"]
     db.session.commit()
     return ok(ws.to_dict())
@@ -362,7 +364,7 @@ def admin_list_users():
 @role_required("admin")
 def admin_update_user(user_id):
     """Body: {role?: admin|user, is_active?: bool}. Không tự sửa chính mình."""
-    body = request.get_json(silent=True) or {}
+    body = json_body()
     user = db.session.get(User, user_id)
     if user is None:
         fail(404, "USER_NOT_FOUND", "Không tìm thấy người dùng")
@@ -400,7 +402,7 @@ def admin_hide_comment(comment_id):
     comment = db.session.get(Comment, comment_id)
     if comment is None:
         fail(404, "COMMENT_NOT_FOUND", "Không tìm thấy bình luận")
-    value = (request.get_json(silent=True) or {}).get("is_hidden")
+    value = json_body().get("is_hidden")
     if not isinstance(value, bool):
         fail(400, "VALIDATION_ERROR", "is_hidden phải là true/false")
     comment.is_hidden = value
@@ -411,10 +413,12 @@ def admin_hide_comment(comment_id):
 def _template_body(body, partial=False):
     data = {}
     if not partial or "name" in body:
-        if not str(body.get("name", "")).strip():
+        if not isinstance(body.get("name"), str) or not body["name"].strip():
             fail(400, "VALIDATION_ERROR", "Thiếu tên mẫu")
         data["name"] = body["name"].strip()
     if "description" in body:
+        if body["description"] is not None and not isinstance(body["description"], str):
+            fail(400, "VALIDATION_ERROR", "description phải là chuỗi")
         data["description"] = body["description"]
     for key in ("milestones", "tasks"):
         if key in body:
@@ -433,7 +437,7 @@ def _template_body(body, partial=False):
 @role_required("admin")
 def admin_create_template():
     """Body: {name, description?, milestones: [{title, offset_days}], tasks: [{title, milestone?, points?, offset_days?}]}."""
-    data = _template_body(request.get_json(silent=True) or {})
+    data = _template_body(json_body())
     if ProjectTemplate.query.filter_by(name=data["name"]).first():
         fail(409, "TEMPLATE_EXISTS", "Đã có mẫu cùng tên")
     t = ProjectTemplate(**data)
@@ -448,7 +452,11 @@ def admin_update_template(template_id):
     t = db.session.get(ProjectTemplate, template_id)
     if t is None:
         fail(404, "TEMPLATE_NOT_FOUND", "Không tìm thấy mẫu dự án")
-    for k, v in _template_body(request.get_json(silent=True) or {}, partial=True).items():
+    data = _template_body(json_body(), partial=True)
+    dup = ProjectTemplate.query.filter_by(name=data["name"]).first() if "name" in data else None
+    if dup and dup.id != t.id:
+        fail(409, "TEMPLATE_EXISTS", "Đã có mẫu cùng tên")
+    for k, v in data.items():
         setattr(t, k, v)
     db.session.commit()
     return ok(t.to_dict())

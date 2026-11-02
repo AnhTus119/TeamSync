@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from flask import current_app, request, send_from_directory
 from werkzeug.utils import secure_filename
 
-from ..common.responses import fail, ok, require_json
+from ..common.responses import fail, json_body, ok, require_json
 from ..common.utils import now, parse_date
 from ..extensions import db
 from ..m20_accounts.permissions import (MANAGER, SUPERVISORS, WORKERS, check_project_access,
@@ -127,9 +127,9 @@ def get_project(project_id):
 def update_project(project_id):
     """Chỉ quản lý. Body: {name?, description?, start_date?, due_date?}."""
     project = check_project_access(project_id, MANAGER)
-    body = request.get_json(silent=True) or {}
+    body = json_body()
     if "name" in body:
-        if not str(body["name"]).strip():
+        if not isinstance(body["name"], str) or not body["name"].strip():
             fail(400, "VALIDATION_ERROR", "Tên dự án không được để trống")
         project.name = body["name"].strip()
     if "description" in body:
@@ -185,7 +185,7 @@ def update_milestone(milestone_id):
     ms = get_milestone(milestone_id, MANAGER)
     if ms.status == "accepted":
         fail(409, "MILESTONE_ACCEPTED", "Cột mốc đã được nghiệm thu")
-    body = request.get_json(silent=True) or {}
+    body = json_body()
     if "title" in body:
         if not str(body["title"]).strip():
             fail(400, "VALIDATION_ERROR", "Tiêu đề không được để trống")
@@ -321,7 +321,7 @@ def update_task(task_id):
     """Chỉ quản lý. Body: {title?, description?, priority?, points?, due_date?, assignee_id?, milestone_id?}.
     Đổi người nhận, hạn, điểm đều được ghi lịch sử."""
     task = get_task(task_id, MANAGER)
-    body = request.get_json(silent=True) or {}
+    body = json_body()
     if "title" in body:
         if not str(body["title"]).strip():
             fail(400, "VALIDATION_ERROR", "Tiêu đề không được để trống")
@@ -468,7 +468,7 @@ def add_attachment(task_id):
         att = Attachment(task_id=task.id, uploaded_by=user.id, kind="file", url=stored,
                          filename=secure_filename(file.filename) or stored)
     else:
-        url = ((request.get_json(silent=True) or {}).get("url") or "").strip()
+        url = (json_body().get("url") or "").strip()
         if not url.startswith(("http://", "https://")):
             fail(400, "VALIDATION_ERROR", "Cần file hoặc url bắt đầu bằng http:// hoặc https://")
         if len(url) > 500:
