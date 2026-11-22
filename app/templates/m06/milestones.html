@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Cột mốc{% endblock %}
+{% block content %}
+{% set tab = 'milestones' %}{% include '_project_nav.html' %}
+<div id="milestones-page" data-project-id="{{ project_id }}"></div>
+<div id="ms-list"></div>
+<form id="new-milestone" class="card p-3 mt-3 d-none" style="max-width:640px">
+  <h2 class="h6">Thêm cột mốc</h2>
+  <div class="row g-2">
+    <div class="col-md-6"><input class="form-control" name="title" placeholder="Tên cột mốc" required></div>
+    <div class="col-md-3"><input class="form-control" type="date" name="due_date"></div>
+    <div class="col-md-3"><button class="btn btn-primary w-100">Thêm</button></div>
+    <div class="col-12"><input class="form-control" name="description" placeholder="Mô tả / tiêu chí nghiệm thu"></div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m06.js') }}"></script>{% endblock %}

@@ -1,0 +1,37 @@
+.legacy-page main.container {
+  max-width: 100%;
+}
+.legacy-page .card {
+  border: 1px solid #e4e9f1;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px #28365b03;
+}
+.legacy-page .btn-primary {
+  background: #c8102e;
+  border-color: #c8102e;
+}
+.legacy-page .form-control,
+.legacy-page .form-select {
+  border-color: #d8e0ec;
+  border-radius: 7px;
+}
+.legacy-page .table {
+  --bs-table-border-color: #edf0f5;
+}
+.legacy-page h1,
+.legacy-page h2,
+.legacy-page h3 {
+  color: #20314f;
+}
+#legacy-menu {
+  display: none;
+}
+.legacy-page i,
+.legacy-page svg {
+  display: none;
+}
+@media (max-width: 1199px) {
+  #legacy-menu {
+    display: block;
+  }
+}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Mẫu dự án{% endblock %}
+{% block content %}
+<h1 class="h4">Quản trị</h1>
+{% set atab = 'templates' %}{% include 'm20/_admin_nav.html' %}
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card p-3"><h2 class="h6">Danh sách mẫu</h2><ul class="list-group list-group-flush" id="tpl-list"></ul></div></div>
+  <div class="col-lg-6"><div class="card p-3">
+    <h2 class="h6" id="tpl-form-title">Thêm mẫu</h2>
+    <form id="tpl-form">
+      <input type="hidden" name="id">
+      <input class="form-control mb-2" name="name" placeholder="Tên mẫu" required>
+      <input class="form-control mb-2" name="description" placeholder="Mô tả">
+      <label class="small">Cột mốc — mỗi dòng: <code>Tên | số ngày từ lúc bắt đầu</code></label>
+      <textarea class="form-control mb-2 font-monospace" name="milestones" rows="4" placeholder="Phân tích yêu cầu | 4"></textarea>
+      <label class="small">Việc — mỗi dòng: <code>Tên | cột mốc | điểm (1/2/3/5)</code></label>
+      <textarea class="form-control mb-2 font-monospace" name="tasks" rows="6" placeholder="Thiết kế CSDL | Phân tích yêu cầu | 3"></textarea>
+      <button class="btn btn-primary">Lưu</button>
+      <button type="button" class="btn btn-link" id="tpl-reset">Thêm mẫu mới</button>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/m20.js') }}"></script>{% endblock %}

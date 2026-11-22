@@ -1,0 +1,15 @@
+{# FILE DÙNG CHUNG: thanh điều hướng trong một dự án. Dùng: {% set tab = 'board' %}{% include '_project_nav.html' %} #}
+<div class="d-flex flex-wrap justify-content-between align-items-end mb-3 gap-2">
+  <div>
+    <div class="small text-muted" id="pn-workspace">&nbsp;</div>
+    <h1 class="h4 mb-0" id="pn-title">Dự án</h1>
+  </div>
+  <span id="pn-role" class="badge text-bg-secondary"></span>
+</div>
+<ul class="nav nav-tabs mb-3" data-project-id="{{ project_id }}" id="project-nav">
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'board' }}" href="{{ url_for('m06_pages.board', project_id=project_id) }}">Kanban</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'milestones' }}" href="{{ url_for('m06_pages.milestones', project_id=project_id) }}">Cột mốc</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'members' }}" href="{{ url_for('m20_pages.members', project_id=project_id) }}">Thành viên</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'dashboard' }}" href="{{ url_for('m17_pages.dashboard', project_id=project_id) }}">Dashboard</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'contributions' }}" href="{{ url_for('m17_pages.contributions', project_id=project_id) }}">Đóng góp</a></li>
+</ul>
