@@ -36,18 +36,33 @@ def project_dto(p):
             .filter(HelpRequest.status.in_(["submitted", "under_review"]))
             .first()
         ),
-        "members": [
-            {
-                **dto(x),
-                "user": {**user_brief(x.user_id), "email": get(User, x.user_id).email},
-            }
-            for x in AssignmentMembership.query.filter_by(project_id=p.id)
-        ],
+        "members": member_cards(p, a),
         "assignment": dto(a),
+        "course_id": a.course_id,
         "criteria": [
             dto(c) for c in Criterion.query.filter_by(policy_id=a.published_policy_id)
         ],
     }
+
+
+def member_cards(p, a):
+    """Members with student code (batched) and published peer score (aggregate only, closed rounds)."""
+    from ..academic.evidence import peer_scores
+    rows = AssignmentMembership.query.filter_by(project_id=p.id).all()
+    ids = [x.user_id for x in rows]
+    users = {u.id: u for u in User.query.filter(User.id.in_(ids))} if ids else {}
+    codes = {e.user_id: e.student_code for e in CourseEnrollment.query.filter(
+        CourseEnrollment.course_id == a.course_id, CourseEnrollment.user_id.in_(ids))} if ids else {}
+    scores = peer_scores(p, ids)
+    return [
+        {
+            **dto(x),
+            "user": {"id": x.user_id, "full_name": users[x.user_id].full_name, "email": users[x.user_id].email},
+            "student_code": codes.get(x.user_id),
+            "peer_score": scores.get(x.user_id),
+        }
+        for x in rows
+    ]
 
 
 def assignment_dto(a):
@@ -848,6 +863,8 @@ def task_submit(tid):
     db.session.flush()
     from ..collab.services import bind_submission
     bind_submission(t,s,b.get("branch_id"))
+    from ..academic.evidence import attach_evidence
+    attach_evidence(t, s, r.id, b.get("evidence_links") or [])
     t.latest_submission_id = s.id
     t.status = "review"
     t.last_progress_at = now()
@@ -857,7 +874,12 @@ def task_submit(tid):
         m.user_id
         for m in AssignmentMembership.query.filter_by(project_id=p.id, status="active")
     ]
-    notify("submission.pending", s, members, f"/tasks/{tid}")
+    notify(
+        "submission.pending",
+        s,
+        [uid for uid in members if uid not in s.participant_ids and uid != s.submitted_by],
+        f"/tasks/{tid}?submission={s.id}#submission-{s.id}",
+    )
     return {
         **dto(s),
         "late": s.received_at > s.submitted_due_at,
@@ -868,20 +890,18 @@ def task_submit(tid):
 @api.post("/submissions/<int:sid>/review")
 @command(idempotent=True)
 def submission_review(sid):
+    from ..academic.evidence import review_scope, decide_referral
     s = get(TaskSubmission, sid, lock=True)
     t = task(s.task_id, mutable=True)
-    version(t)
-    state(t, ["review"])
-    state(s, ["pending"])
     need(
-        t.latest_submission_id == sid,
+        s.status == "pending" and t.status == "review" and t.latest_submission_id == sid,
         "VERSION_CONFLICT",
-        "Bản nộp đang xem đã thay đổi",
+        "Bản nộp này đã có quyết định hoặc đã có lần nộp mới. Tải lại để xem dữ liệu mới",
         409,
     )
-    m = membership(t.project_id)
-    need(m and not is_staff(get(Project,t.project_id)) and (m.role == "leader" or s.submitted_by != current_user().id),
-         "FORBIDDEN", "Thành viên không được tự duyệt bài mình nộp", 403)
+    scope, why = review_scope(s, t=t)
+    need(scope is not None, "FORBIDDEN", why or "Bạn không có quyền duyệt bản nộp này", 403)
+    version(t)
     b = json_body()
     action = b.get("action")
     need(action in ("accept", "return"))
@@ -903,13 +923,19 @@ def submission_review(sid):
     s.review_reason = reason
     t.status = "done" if action == "accept" else "in_progress"
     t.completed_at = now().replace(tzinfo=None) if action == "accept" else None
+    decide_referral(s)
     audit("submission." + s.status, s, pid=t.project_id, reason=reason)
     from ..models.teamwork import BranchMergeRequest, TaskBranch
     binding = BranchMergeRequest.query.filter_by(submission_id=s.id).first()
     if binding:
         branch = get(TaskBranch,binding.branch_id)
         branch.status = "merged" if action == "accept" else "open"
-    notify("submission.reviewed", s, s.participant_ids, f"/tasks/{t.id}")
+    notify(
+        "submission.reviewed",
+        s,
+        list(set(s.participant_ids) | {s.submitted_by}),
+        f"/tasks/{t.id}?submission={s.id}#submission-{s.id}",
+    )
     return {**dto(s), "task_version": t.version}
 
 

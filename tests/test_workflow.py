@@ -37,6 +37,9 @@ class Client:
         assert r.status_code==code,(path,r.status_code,r.json)
         return r.json['data'] if r.is_json and code<400 else r
 
+def name_of(app,email):
+    with app.app_context():return User.query.filter_by(email=email).one().full_name
+
 def test_demo_scope_and_retired_paths(app):
     c=Client(app,'sv1@gmail.com');home=c.req('/workflow/home');assert len(home['courses'])==8;assert home['courses'][0]['title']=='Lập trình Web'
     for path in ['/projects/1/grades','/projects/1/quality','/projects/1/analytics','/projects/1/peer-matrix','/projects/1/commitment']:
@@ -80,7 +83,7 @@ def test_member_departure_requires_leader_and_preserves_work(app):
     c=Client(app,'sv4@gmail.com');x=c.req('/workflow/projects/1/departures',{'reason':'Xin rời'},code=201)
     c.req(f'/workflow/departures/{x["id"]}/vote',{'version':x['version'],'agree':True},code=403)
     leader=Client(app,'sv1@gmail.com');leader.req(f'/workflow/departures/{x["id"]}/vote',{'version':x['version'],'agree':True})
-    r=leader.req('/workflow/projects/1/report');assert any(m['user']['full_name']=='Sinh viên 04' and float(m['accepted_workload'])>0 for m in r['members'])
+    r=leader.req('/workflow/projects/1/report');name=name_of(app,'sv4@gmail.com');assert any(m['user']['full_name']==name and float(m['accepted_workload'])>0 for m in r['members'])
 
 def test_group_formation_approval_and_teacher_add(app):
     c=Client(app,'sv31@gmail.com');p=c.req('/assignments/1/projects',{'name':'Nhóm mới'},code=201)

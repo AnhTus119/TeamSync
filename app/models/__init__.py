@@ -32,4 +32,4 @@ from .m17 import PeerReview  # noqa: F401
 
 from .academic import *
 from .teamwork import *
-from .workflow import GroupDeparture, ReportSnapshot, DeadlineReminder, GroupDelivery
+from .workflow import GroupDeparture, ReportSnapshot, DeadlineReminder, GroupDelivery, EvidenceCriterion, SubmissionEvidence, SubmissionReferral, ScheduleItem

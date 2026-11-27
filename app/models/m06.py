@@ -61,6 +61,7 @@ class Project(db.Model):
     )
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, default="")
+    team_name = db.Column(db.String(120), nullable=False, default="", server_default="")
     start_date = db.Column(db.Date)
     due_date = db.Column(db.Date)
     template_id = db.Column(db.Integer, db.ForeignKey("project_template.id"))

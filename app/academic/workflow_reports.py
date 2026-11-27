@@ -22,7 +22,8 @@ def tables(d):
       ('Điều chỉnh',['Công việc','Người quyết định','Lý do','Tỷ lệ mới'],[[next((t['title'] for t in d['tasks'] if t['id']==x['task_id']),str(x['task_id'])),x['decided_by_name'],x['reason'],'; '.join(next((m['user']['full_name'] for m in d['members'] if str(m['user']['id'])==uid),uid)+': '+str(v)+'%' for uid,v in x['shares'].items())] for x in d['allocation_history']]),
       ('Diễn biến',['Thời điểm','Sự kiện','Nội dung'],[[e['at'],{'task.created':'Tạo việc','task.started':'Bắt đầu','task.submitted':'Nộp bài','submission.accepted':'Duyệt hoàn thành','submission.returned':'Yêu cầu sửa'}.get(e['action'],e['action']),e['reason']] for e in d['timeline']]),
       ('Sản phẩm',['Tên bàn giao','Ngày nộp','Mã bài nộp'],[[x['title'],x['created_at'],', '.join(map(str,x['submission_ids']))] for x in d['deliveries']]),
-      ('Tài liệu đề bài',['Tên tài liệu'],[[x['original_filename']] for x in d['documents']])]
+      ('Tài liệu đề bài',['Tên tài liệu'],[[x['original_filename']] for x in d['documents']]),
+      ('Minh chứng',['Tiêu chí','Bản đã duyệt','Bản chờ duyệt','Bản cần sửa'],[[e['title']+('' if e.get('is_active',True) else ' (đã ẩn)'),e['accepted'],e['pending'],e['returned']] for e in d.get('evidence',[])])]
 
 def export_report(d,fmt):
     need(fmt in ('xlsx','pdf','html'));out=BytesIO();tabs=tables(d)

@@ -7,6 +7,10 @@ from ..models.workflow import GroupDeparture, ReportSnapshot, DeadlineReminder, 
 from ..models.teamwork import Meeting, MatrixReview
 from ..m06_projects.academic_api import project_dto, add_group_member
 bp=Blueprint('workflow',__name__,url_prefix='/api/v1/workflow')
+from . import evidence as _evidence
+_evidence.register(bp)
+from . import schedule as _schedule
+_schedule.register(bp)
 
 def members(pid):
     return AssignmentMembership.query.filter_by(project_id=pid,status='active').all()
@@ -39,7 +43,7 @@ def home():
                 tasks.extend([{**task_summary(t),'project_name':p.name,'course_title':c.title,'course_id':c.id} for t in ts if TaskParticipant.query.filter_by(task_id=t.id,user_id=current_user().id).first() or (membership(p.id).role=='leader' and t.status=='review')])
             elif p.status=='pending':pending.append({'id':p.id,'name':p.name,'course_title':c.title})
         courses.append({**dto(c),'my_role':e.role,'assignment':dto(a) if a and (not a.is_hidden or e.role in STAFF) else None,'groups':cards})
-    return {'courses':courses,'tasks':tasks,'pending_groups':pending}
+    return {'courses':courses,'tasks':tasks,'pending_groups':pending,**_evidence.dashboard_data()}
 
 @bp.post('/projects/<int:pid>/approval')
 @command(idempotent=True)
@@ -193,13 +197,14 @@ def report_data(p):
     d=group_report(p);d.pop('quality',None)
     d['course']=dto(get(CourseOffering,get(Assignment,p.assignment_id).course_id))
     d['peer']=peer_results(p)
+    d['evidence']=_evidence.evidence_summary(p)
     d['departures']=[departure_dto(x) for x in GroupDeparture.query.filter_by(project_id=p.id)]
     d['deliveries']=[dto(x) for x in GroupDelivery.query.filter_by(project_id=p.id).order_by(GroupDelivery.id.desc())]
     d['documents']=rows(AssignmentFile,assignment_id=p.assignment_id)
     # Contribution decisions are reportable; raw allegations remain scoped to the case.
     d['complaints']=[]
     d['allocation_history']=[{**dto(x),'decided_by_name':user_brief(x.decided_by)['full_name']} for x in AllocationChange.query.join(Task).filter(Task.project_id==p.id)]
-    events=AuditEvent.query.filter_by(project_id=p.id).filter(AuditEvent.action.in_(['task.created','task.started','task.submitted','submission.accepted','submission.returned'])).order_by(AuditEvent.created_at,AuditEvent.id).all()
+    events=AuditEvent.query.filter_by(project_id=p.id).filter(AuditEvent.action.in_(['task.created','task.started','task.submitted','submission.accepted','submission.returned','submission.referred'])).order_by(AuditEvent.created_at,AuditEvent.id).all()
     d['timeline']=[{'at':iso(e.created_at),'action':e.action,'reason':e.reason or ''} for e in events]
     d['formula']='Khối lượng đã duyệt × tỷ lệ đóng góp của từng công việc. Tỷ trọng = khối lượng ghi nhận cá nhân / tổng khối lượng ghi nhận × 100. Đánh giá chéo: trung bình các phiếu hợp lệ theo từng tiêu chí; không tính phiếu bỏ qua là 0.'
     return d
