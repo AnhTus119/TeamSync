@@ -1,9 +1,10 @@
 # Phạm vi xác minh
 
-Bản sửa sử dụng bộ kiểm tra mới, không kế thừa con số 43 test của bản cũ.
+Lệnh: `python -m pytest -q tests` (Python 3.12, Chromium/Playwright) → **35 passed**.
 
-- 14 test API/nghiệp vụ: phạm vi nhóm, luồng đã bỏ, lớp một bài tập, rubric tùy chọn, nộp chung, duyệt/sửa, biểu quyết rời, lưu đóng góp người đã rời, lập nhóm và duyệt, tổng hợp đánh giá ẩn danh, hỗ trợ không cần mentor invite, tổng tỷ lệ 100%, chống trùng nhắc hạn, xuất báo cáo/bản lưu/bàn giao, biên bản riêng tư, CSRF và quyền file.
-- 2 test trình duyệt: kéo thả thật, nộp/sửa/nộp lại/duyệt, lỗi nhận xét, ẩn/hiện lịch sử, tải XLSX và mở bằng openpyxl, lưu báo cáo, mobile không tràn ngang; mở/đóng đánh giá chéo và tạo lớp.
-- Đã xem ảnh desktop/mobile; kiểm tra cú pháp JavaScript và biên dịch Python.
+- `tests/test_workflow.py` (14 test): phạm vi nhóm, luồng đã bỏ, lớp một đề bài, nộp chung, duyệt/sửa, biểu quyết rời, lập nhóm, đánh giá chéo ẩn danh, hỗ trợ, tổng tỷ lệ 100%, chống trùng nhắc hạn, báo cáo/bản lưu/bàn giao, biên bản riêng tư, CSRF và quyền tệp.
+- `tests/test_evidence_review.py` (7 test): luồng chuyển giảng viên đầy đủ (Lần 1 giữ nguyên, bản cũ không nhận quyết định, quyết định thứ hai bị 409), trưởng nhóm có tên trong lần nộp bị chặn, phạm vi tiêu chí/tệp và tiêu chí ẩn, quyền âm cho người ngoài nhóm và giảng viên lớp khác, nhập CSV có dòng lỗi rồi nhập lại, số liệu Tổng quan và cảnh báo theo quyền, seed chạy lặp an toàn và migration nâng cấp DB cũ.
+- Bổ sung: phạm vi Kanban cá nhân, API Timeline (chủ sở hữu, chia sẻ chỉ xem, xung đột phiên bản), Dự án theo tiến độ/sắp xếp/tạo dự án (cả trường hợp API từ chối), Kanban cá nhân (ưu tiên, lọc, trạng thái trống), tab Cần sửa, icon sidebar, font tiêu đề, Timeline kéo thả thật và phím tắt, Tổng quan 4 cột.
+- `tests/test_browser.py` (5 test gốc): kéo thả nộp/sửa/duyệt, xuất XLSX, mobile; đánh giá chéo và tạo lớp; luồng demo tiêu chí → chuyển GV → yêu cầu sửa → nộp lại → duyệt → mở lại Lần 1; điều hướng sáu thẻ Tổng quan, công tắc Cột/Tròn, cảnh báo, Kanban, menu avatar/đăng xuất; ba tab Học phần, modal nhập CSV và màn hình 390 px không tràn ngang.
 
-Chưa kiểm thử tải nhiều người dùng, pentest độc lập, tích hợp LMS hoặc chạy trực tiếp trên Windows/PyCharm. Launcher đã chạy trong môi trường Linux Python 3.12; hướng dẫn PyCharm sử dụng cùng entry point. Cảnh báo thư viện migration về get_engine không phải lỗi test.
+Đã chạy `run.py` với thư mục dữ liệu riêng, dừng và chạy lại: số bài nộp và dự án giữ nguyên. Chưa kiểm thử tải nhiều người dùng, pentest độc lập hoặc chạy trực tiếp trên Windows/PyCharm.

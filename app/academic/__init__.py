@@ -8,3 +8,4 @@ def register_domains():
     from ..m06_projects import academic_api as projects
     from ..m17_reports import academic_api as reports
     from . import collaboration
+    from . import evidence  # noqa: F401  (registers /submissions/<sid>/refer)

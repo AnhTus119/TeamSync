@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "TeamSync: chạy ứng dụng (run.py)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PORT": "5000"
+      }
+    },
+    {
+      "name": "TeamSync: thêm dữ liệu ngẫu nhiên",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/seed_random.py",
+      "args": [
+        "--projects",
+        "6",
+        "--tasks",
+        "8"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "TeamSync: chạy toàn bộ test",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-q",
+        "tests"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

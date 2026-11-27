@@ -27,6 +27,9 @@ for n, path in enumerate(
         "/notifications",
         "/my-tasks",
         "/portfolios",
+        "/kanban",
+        "/timeline",
+        "/submissions",
     )
 ):
     pages.add_url_rule(path, endpoint=f"view_{n}", view_func=page_login_required(shell))
@@ -42,7 +45,7 @@ def install_shell_overrides(app):
 
         if request.method != "GET":
             return
-        if request.path == "/account":
+        if request.path in ("/account", "/projects", "/kanban", "/submissions", "/timeline"):
             return page_login_required(shell)()
         if request.path == "/login":
             return shell()

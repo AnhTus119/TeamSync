@@ -1,1 +1,55 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TeamSync — Không gian nhóm</title><link rel="stylesheet" href="/static/css/workspace.css"><script src="/static/vendor/chart.js-4.4.8.umd.min.js" defer></script><script type="module" src="/static/js/workspace.js"></script></head><body><a class="skip" href="#main">Đến nội dung</a><aside id="sidebar"><a class="brand" href="/home">TeamSync<span>Cùng làm. Cùng tiến bộ.</span></a><nav><a href="/home">Tổng quan</a><a href="/courses">Lớp học phần</a><a href="/my-tasks" id="my-nav">Công việc của tôi</a><a href="/notifications">Thông báo <span id="unread"></span></a></nav><div class="account"><strong id="user-name"></strong><small id="user-email"></small><a href="/account">Tài khoản</a><button id="logout" class="secondary">Đăng xuất</button></div></aside><div id="workspace"><header><button class="secondary" id="menu">Menu</button><span id="breadcrumb">Không gian làm việc</span><span id="role"></span></header><main id="main"><div id="notice" role="status"></div><div id="view" aria-live="polite">Đang tải…</div></main></div></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TeamSync — Không gian nhóm</title>
+<link rel="stylesheet" href="/static/css/workspace.css?v=6">
+<script src="/static/vendor/chart.js-4.4.8.umd.min.js" defer></script>
+<script type="module" src="/static/js/workspace.js?v=6"></script>
+</head>
+<body>
+<a class="skip" href="#main">Đến nội dung</a>
+<header class="topbar">
+  <div class="topbar-left">
+    <button type="button" class="icon-btn" id="menu" aria-label="Bật/tắt thanh điều hướng" aria-expanded="true" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a class="brand" href="/home">TeamSync</a>
+  </div>
+  <div class="topbar-right" id="topbar-user" hidden>
+    <button type="button" class="icon-btn" id="contact" aria-label="Liên hệ">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.5" cy="8.5" r="2.6"/><path d="M15.5 13.6c2.6-.3 4.6 1.4 5 4.4"/></svg>
+    </button>
+    <a class="icon-btn bell" href="/notifications" id="bell" aria-label="Thông báo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+      <span class="dot" id="unread-dot" hidden></span><span class="sr-only" id="unread"></span>
+    </a>
+    <span class="user-name" id="user-name"></span>
+    <div class="avatar-wrap">
+      <button type="button" class="avatar" id="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Mở menu tài khoản"></button>
+      <div class="account-menu" id="account-menu" hidden>
+        <strong id="menu-name"></strong>
+        <span id="menu-role"></span>
+        <span id="menu-code"></span>
+        <span id="menu-email"></span>
+        <a href="/account" id="menu-settings">Cài đặt</a>
+        <button type="button" id="logout">Đăng xuất</button>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="layout">
+  <aside id="sidebar" aria-label="Điều hướng chính">
+    <nav id="main-nav"></nav>
+    <div class="nav-divider" aria-hidden="true"><span></span></div>
+    <nav id="project-nav" aria-label="Dự án"></nav>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <main id="main">
+    <div id="notice" role="status" aria-live="polite"></div>
+    <div id="view" aria-live="polite"><div class="loading">Đang tải…</div></div>
+  </main>
+</div>
+</body>
+</html>

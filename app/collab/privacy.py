@@ -33,7 +33,9 @@ def install_privacy(app):
                 if e and e.role in STAFF:
                     if any(x in path for x in ('/audit','/comments','/claims','/change-requests','/invitations')):
                         need(False,'FORBIDDEN','Nội dung vận hành nội bộ chỉ dành cho nhóm',403)
-                    if request.method!='GET' and not any(x in path for x in ('/help-requests',)):
+                    # Review is allowed only for a submission referred to this instructor; the handler checks the referral.
+                    review=path.startswith('/api/v1/submissions/') and path.endswith('/review')
+                    if request.method!='GET' and not review and not any(x in path for x in ('/help-requests',)):
                         need(False,'READ_ONLY','Giảng viên chỉ theo dõi tiến độ và đánh giá học vụ',403)
 
 

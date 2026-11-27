@@ -452,6 +452,10 @@ def task_dto(t):
             related(EvidenceRevision, task_id=t.id), key=lambda r: r.revision_no
         )
     ]
+    from .evidence import submission_extras
+    by_id = {x.id: x for x in related(TaskSubmission, task_id=t.id)}
+    for x in d["submissions"]:
+        x.update(submission_extras(by_id[x["id"]], t))
     if is_staff(get(Project,t.project_id)):
         submitted={x["revision_id"] for x in d["submissions"]}
         d["revisions"]=[r for r in d["revisions"] if r["id"] in submitted]
@@ -466,6 +470,7 @@ def task_dto(t):
         "task.submitted": "Gửi duyệt",
         "submission.accepted": "Duyệt hoàn thành",
         "submission.returned": "Yêu cầu sửa",
+        "submission.referred": "Chuyển bản nộp cho giảng viên",
     }
     submission_ids = [x["id"] for x in d["submissions"]]
     events = (
@@ -632,7 +637,7 @@ def prefetch_tasks(tasks, detailed=False):
             ProgressCheckin,
         )
         if detailed
-        else (TaskParticipant, TaskCriterion)
+        else (TaskParticipant, TaskCriterion, TaskSubmission)
     ):
         records = cls.query.filter(cls.task_id.in_(ids)).all()
         objects.extend(records)
@@ -651,6 +656,13 @@ def prefetch_tasks(tasks, detailed=False):
     g.prefetched_objects = objects
 
 
+def latest_status(t):
+    if not t.latest_submission_id:
+        return None
+    s = next((x for x in related(TaskSubmission, task_id=t.id) if x.id == t.latest_submission_id), None)
+    return s.status if s else None
+
+
 def task_summary(t):
     return {
         "id": t.id,
@@ -665,6 +677,9 @@ def task_summary(t):
         "points": t.points,
         "version": t.version,
         "latest_submission_id": t.latest_submission_id,
+        "latest_submission_status": latest_status(t),
+        "return_count": sum(s.status == "returned" for s in related(TaskSubmission, task_id=t.id)),
+        "overdue": t.status in ("todo", "in_progress") and t.due_at < now(),
         "participants": [
             {"user_id": x.user_id, "role": x.role, "user": user_brief(x.user_id)}
             for x in related(TaskParticipant, task_id=t.id)
