@@ -3,7 +3,7 @@ import io, sqlite3, shutil
 from pathlib import Path
 from datetime import timedelta
 from flask_migrate import upgrade
-from test_workflow import app, template, Client, now
+from test_workflow import app, template, Client, now, demo, name_of, MA, TH, QB, GL, GV, GV_AI
 from app import create_app
 from app.extensions import db
 
@@ -20,9 +20,12 @@ def submit(c, tid, note, evidence=None, url='https://example.com/ban-nop'):
 
 
 def test_full_referral_flow_and_history(app):
-    ma, th, qb, gv = (Client(app, e) for e in ('minhanh@gmail.com', 'thuha@gmail.com', 'quocbao@gmail.com', 'gv2@gmail.com'))
-    t = find_task(ma, 'Cập nhật ước tính đầu việc tích hợp')  # ChatbotAI: TH leads, MA responsible
-    aid = ma.req(f'/projects/{t["project_id"]}')['assignment_id']
+    ma, th, gv = (Client(app, e) for e in (MA, TH, GV_AI))
+    t = find_task(ma, 'Cập nhật ước tính đầu việc tích hợp')  # ChatbotAI: Thu Hà leads, Minh Anh responsible
+    proj = ma.req(f'/projects/{t["project_id"]}')
+    aid = proj['assignment_id']
+    # another ChatbotAI member who is neither leader nor in the roster of this submission
+    qb = Client(app, next(m['user']['email'] for m in proj['members'] if m['role'] != 'leader' and m['user']['email'] != MA))
     crit = gv.req(f'/workflow/assignments/{aid}/evidence-criteria', {'title': 'Bảng ước tính tích hợp'}, code=201)
     ma.req(f'/workflow/assignments/{aid}/evidence-criteria', {'title': 'Sinh viên tạo'}, code=403)
     first = ma.req(f'/tasks/{t["id"]}')['submissions'][0]
@@ -65,7 +68,7 @@ def test_full_referral_flow_and_history(app):
 
 
 def test_leader_in_roster_must_be_reviewed_by_someone_else(app):
-    ma, gl = Client(app, 'minhanh@gmail.com'), Client(app, 'gialinh@gmail.com')
+    ma, gl = Client(app, MA), Client(app, GL)
     t = find_task(ma, 'Nộp kịch bản kiểm thử luồng tiếp nhận')  # Free2do, MA leads and submitted
     d = ma.req(f'/tasks/{t["id"]}')
     sid = d['latest_submission_id']
@@ -76,12 +79,12 @@ def test_leader_in_roster_must_be_reviewed_by_someone_else(app):
 
 
 def test_evidence_scope_and_hidden_criterion(app):
-    ma, gv = Client(app, 'minhanh@gmail.com'), Client(app, 'gv2@gmail.com')
-    t = find_task(ma, 'Phân công người phụ trách báo cáo tuần')  # Bảng điều hành, in_progress
+    ma, gv = Client(app, MA), Client(app, GV)
+    t = find_task(ma, 'Sửa lỗi tạo phiếu hỗ trợ')  # Free2do (TS. Nguyễn Khánh An), in_progress
     p = ma.req(f'/projects/{t["project_id"]}')
     own = gv.req(f'/workflow/assignments/{p["assignment_id"]}/evidence-criteria', {'title': 'Báo cáo tuần'}, code=201)
-    free2do = find_task(ma, 'Sửa lỗi tạo phiếu hỗ trợ')
-    foreign = ma.req(f'/workflow/assignments/{ma.req("/projects/" + str(free2do["project_id"]))["assignment_id"]}/evidence-criteria')['items'][0]
+    chatbot = find_task(ma, 'Cập nhật ước tính đầu việc tích hợp')
+    foreign = ma.req(f'/workflow/assignments/{ma.req("/projects/" + str(chatbot["project_id"]))["assignment_id"]}/evidence-criteria')['items'][0]
     d = ma.req(f'/tasks/{t["id"]}')
     a = ma.req(f'/tasks/{t["id"]}/assets', {'url': 'https://example.com/a'}, code=201)
     b = ma.req(f'/tasks/{t["id"]}/assets', {'url': 'https://example.com/b'}, code=201)
@@ -89,19 +92,19 @@ def test_evidence_scope_and_hidden_criterion(app):
     ma.req(f'/tasks/{t["id"]}/submissions', {**body, 'evidence_links': [{'criterion_id': foreign['id'], 'asset_id': a['id']}]}, code=400)
     ma.req(f'/tasks/{t["id"]}/submissions', {**body, 'evidence_links': [{'criterion_id': own['id'], 'asset_id': b['id']}]}, code=400)
     hidden = gv.req(f'/workflow/evidence-criteria/{own["id"]}', {'version': own['version'], 'is_active': False}, 'PATCH')
-    assert not ma.req(f'/workflow/assignments/{p["assignment_id"]}/evidence-criteria')['items']
+    assert own['id'] not in [x['id'] for x in ma.req(f'/workflow/assignments/{p["assignment_id"]}/evidence-criteria')['items']]
     ma.req(f'/tasks/{t["id"]}/submissions', {**body, 'evidence_links': [{'criterion_id': own['id'], 'asset_id': a['id']}]}, code=409)
     gv.req(f'/workflow/evidence-criteria/{own["id"]}', {'version': hidden['version'], 'is_active': True}, 'PATCH')
     s = ma.req(f'/tasks/{t["id"]}/submissions', {**body, 'evidence_links': [{'criterion_id': own['id'], 'asset_id': a['id']}]}, code=201)
     staff_view = gv.req(f'/workflow/assignments/{p["assignment_id"]}/evidence-criteria')
-    assert staff_view['can_manage'] and staff_view['items'][0]['is_active']
+    assert staff_view['can_manage'] and next(x for x in staff_view['items'] if x['id'] == own['id'])['is_active']
     rep = ma.req(f'/workflow/projects/{t["project_id"]}/report')
     assert next(e for e in rep['evidence'] if e['criterion_id'] == own['id'])['pending'] == 1
-    assert s['attempt_no'] == 1
+    assert s['attempt_no'] == 3
 
 
 def test_outsider_and_instructor_boundaries(app):
-    ma, sv1, gv1 = Client(app, 'minhanh@gmail.com'), Client(app, 'sv1@gmail.com'), Client(app, 'gv1@gmail.com')
+    ma, sv1, gv1 = Client(app, MA), Client(app, demo(app)['outsider']), Client(app, GV_AI)  # outsider student, instructor of another course
     t = find_task(ma, 'Sửa lỗi tạo phiếu hỗ trợ')
     sid = ma.req(f'/tasks/{t["id"]}')['latest_submission_id']
     sv1.req(f'/tasks/{t["id"]}', code=404)
@@ -118,8 +121,8 @@ def test_outsider_and_instructor_boundaries(app):
 
 
 def test_import_preview_error_then_fixed_file(app):
-    gv = Client(app, 'gv2@gmail.com')
-    cid = next(c['id'] for c in gv.req('/workflow/home')['courses'] if c['code'] == 'TSD-01')
+    gv = Client(app, GV)
+    cid = next(c['id'] for c in gv.req('/workflow/home')['courses'] if c['title'] == 'Phát triển ứng dụng Web')
     bad = 'student_code,full_name,email\nTSNEW041,An Bình,anbinh@example.org\nTSNEW042,Bảo Linh,email-khong-hop-le\n'
     r = gv.c.post(f'/api/v1/courses/{cid}/imports/preview', data={'file': (io.BytesIO(bad.encode()), 'ds.csv')}, headers={'X-CSRF-Token': gv.token})
     assert r.status_code == 201 and r.json['data']['counts'] == {'total': 2, 'errors': 1}
@@ -136,19 +139,22 @@ def test_import_preview_error_then_fixed_file(app):
 
 
 def test_dashboard_counts_and_alerts(app):
-    ma = Client(app, 'minhanh@gmail.com')
+    ma = Client(app, MA)
     d = ma.req('/workflow/home')
     s = d['stats']
-    assert s['projects'] == 7 and s['lead'] == 2 and s['project_tasks'] == 28
+    assert s['projects'] == 7 and s['lead'] == 2 and s['project_tasks'] == sum(p['total'] for p in d['projects'])
     assert s['task_total'] == len(ma.req('/workflow/tasks?scope=mine')['items'])  # same personal set as the Kanban board
     assert s['repair'] >= 1 and s['due'] >= 1 and s['review'] >= 1
-    assert s['peer_score'] is not None and 0 < s['peer_score'] <= 10 and s['peer_projects'] == 4
+    assert s['peer_score'] is not None and 0 < s['peer_score'] <= 10 and s['peer_projects'] >= 1
     assert d['review_queue'] == len(ma.req('/workflow/submissions')['to_review'])
     assert any(a['kind'] == 'repeat_return' and 'submission=' in a['link'] for a in d['alerts'])
     # stale review (>48h) is shown only to people allowed to review it
-    gl = Client(app, 'gialinh@gmail.com')
+    gl = Client(app, GL)
     assert any(a['kind'] == 'stale_review' for a in gl.req('/workflow/home')['alerts'])
-    assert not any(a['kind'] == 'stale_review' for a in d['alerts'])
+    can_review = {r['link'] for r in ma.req('/workflow/submissions')['to_review']}
+    assert all(a['link'] in can_review for a in d['alerts'] if a['kind'] == 'stale_review')
+    script = next(t for t in ma.req('/workflow/tasks')['items'] if t['title'] == 'Nộp kịch bản kiểm thử luồng tiếp nhận')
+    assert not any(a['kind'] == 'stale_review' and a['task_id'] == script['id'] for a in d['alerts'])  # Minh Anh submitted it
     assert [t['due_at'] for t in d['upcoming']] == sorted(t['due_at'] for t in d['upcoming'])
 
 
@@ -201,7 +207,7 @@ def test_random_seed_keeps_business_rules(app):
             for s in subs:
                 if s.reviewed_by:
                     assert s.reviewed_by not in s.participant_ids and s.reviewed_by != s.submitted_by
-    ma, gv = Client(app, 'minhanh@gmail.com'), Client(app, 'gv2@gmail.com')
+    ma, gv = Client(app, MA), Client(app, GV)
     home = ma.req('/workflow/home')
     for t in ma.req('/workflow/tasks')['items'][:40]:
         ma.req(f'/tasks/{t["id"]}')
@@ -210,7 +216,7 @@ def test_random_seed_keeps_business_rules(app):
 
 
 def test_personal_kanban_scope_excludes_review_only_tasks(app):
-    gl = Client(app, 'gialinh@gmail.com')
+    gl = Client(app, GL)
     me_id = gl.req('/auth/me')['id']
     mine = gl.req('/workflow/tasks?scope=mine')['items']
     assert mine and all(any(p['user_id'] == me_id for p in t['participants']) for t in mine)
@@ -221,7 +227,7 @@ def test_personal_kanban_scope_excludes_review_only_tasks(app):
 
 
 def test_schedule_owner_edit_share_and_scope(app):
-    ma, th, sv1 = Client(app, 'minhanh@gmail.com'), Client(app, 'thuha@gmail.com'), Client(app, 'sv1@gmail.com')
+    ma, th, sv1 = Client(app, MA), Client(app, TH), Client(app, demo(app)['outsider'])
     pid = next(p['id'] for p in ma.req('/workflow/home')['projects'] if p['name'] == 'Free2do')
     today = ma.req('/workflow/schedule?view=created')['today']
     ma.req('/workflow/schedule', {'title': 'Sai', 'category': 'study', 'start': today, 'end': '2000-01-01'}, code=400)
@@ -229,7 +235,7 @@ def test_schedule_owner_edit_share_and_scope(app):
     sv1.req('/workflow/schedule', {'title': 'Không thuộc nhóm', 'category': 'meeting', 'start': today, 'end': today, 'project_id': pid}, code=404)
     x = ma.req('/workflow/schedule', {'title': 'Họp chốt demo', 'category': 'meeting', 'start': today, 'end': today, 'project_id': pid, 'note': 'Phòng 201'}, code=201)
     shared = next(i for i in th.req('/workflow/schedule?view=mine')['items'] if i['kind'] == 'item' and i['id'] == x['id'])
-    assert shared['editable'] is False and shared['owner_name'] == 'Minh Anh'
+    assert shared['editable'] is False and shared['owner_name'] == name_of(app, MA)
     assert all(i['id'] != x['id'] for i in sv1.req('/workflow/schedule?view=mine')['items'] if i['kind'] == 'item')
     th.req(f'/workflow/schedule/{x["id"]}', {'version': x['version'], 'title': 'Sửa hộ'}, 'PATCH', code=403)
     th.req(f'/workflow/schedule/{x["id"]}', None, 'DELETE', code=403)
@@ -244,13 +250,14 @@ def test_schedule_owner_edit_share_and_scope(app):
 
 
 def test_member_cards_code_and_published_score_only(app):
-    gv1, sv1, sv2 = Client(app, 'gv1@gmail.com'), Client(app, 'sv1@gmail.com'), Client(app, 'sv2@gmail.com')
-    p = sv1.req('/projects/1')
+    d = demo(app); pid, aid = d['pid'], d['aid']
+    gv1, sv1, sv2 = Client(app, GV), Client(app, MA), Client(app, TH)
+    p = sv1.req(f'/projects/{pid}')
     assert all(m['student_code'] for m in p['members']) and all(m['peer_score'] is None for m in p['members'])
-    r = gv1.req('/assignments/1/evaluation-rounds', {'title': 'Đợt thử', 'closes_at': (now() + timedelta(days=2)).isoformat()}, code=201)
-    target = next(m for m in p['members'] if m['user']['email'] == 'sv3@gmail.com')
-    sv2.req('/workflow/projects/1/peer', {'round_id': r['id'], 'items': [{'reviewee_id': target['user_id'], 'attitude': 9, 'quality': 8}]}, method='PUT')
-    assert next(m for m in sv1.req('/projects/1')['members'] if m['user_id'] == target['user_id'])['peer_score'] is None  # round still open
+    r = gv1.req(f'/assignments/{aid}/evaluation-rounds', {'title': 'Đợt thử', 'closes_at': (now() + timedelta(days=2)).isoformat()}, code=201)
+    target = next(m for m in p['members'] if m['user']['email'] == QB)
+    sv2.req(f'/workflow/projects/{pid}/peer', {'round_id': r['id'], 'items': [{'reviewee_id': target['user_id'], 'attitude': 9, 'quality': 8}]}, method='PUT')
+    assert next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == target['user_id'])['peer_score'] is None  # round still open
     gv1.req(f'/evaluation-rounds/{r["id"]}/close', {'version': r['version']})
-    m = next(m for m in sv1.req('/projects/1')['members'] if m['user_id'] == target['user_id'])
+    m = next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == target['user_id'])
     assert m['peer_score'] == 8.5 and 'reviewer_id' not in m

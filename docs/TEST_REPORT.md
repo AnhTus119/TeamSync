@@ -1,6 +1,6 @@
 # Phạm vi xác minh
 
-Lệnh: `python -m pytest -q tests` (Python 3.12, Chromium/Playwright) → **35 passed**.
+Lệnh: `python -m pytest -q tests` (dữ liệu demo khoa KHMT; test dò bản ghi theo tên, không phụ thuộc id) (Python 3.12, Chromium/Playwright) → **36 passed**.
 
 - `tests/test_workflow.py` (14 test): phạm vi nhóm, luồng đã bỏ, lớp một đề bài, nộp chung, duyệt/sửa, biểu quyết rời, lập nhóm, đánh giá chéo ẩn danh, hỗ trợ, tổng tỷ lệ 100%, chống trùng nhắc hạn, báo cáo/bản lưu/bàn giao, biên bản riêng tư, CSRF và quyền tệp.
 - `tests/test_evidence_review.py` (7 test): luồng chuyển giảng viên đầy đủ (Lần 1 giữ nguyên, bản cũ không nhận quyết định, quyết định thứ hai bị 409), trưởng nhóm có tên trong lần nộp bị chặn, phạm vi tiêu chí/tệp và tiêu chí ẩn, quyền âm cho người ngoài nhóm và giảng viên lớp khác, nhập CSV có dòng lỗi rồi nhập lại, số liệu Tổng quan và cảnh báo theo quyền, seed chạy lặp an toàn và migration nâng cấp DB cũ.

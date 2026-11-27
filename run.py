@@ -59,7 +59,7 @@ if __name__ == "__main__":
     stop = threading.Event()
     threading.Thread(target=background_worker, args=(stop,), daemon=True).start()
     print(
-        f"TeamSync: http://127.0.0.1:{os.getenv('PORT', '5000')} | gv1@gmail.com / sv1@gmail.com | password: 12345"
+        f"TeamSync: http://127.0.0.1:{os.getenv('PORT', '5000')} | minhanh@sv.teamsync.test / khanhan@gv.teamsync.test | mật khẩu: 12345 (xem docs/TAI_KHOAN_DEMO.md)"
     )
     try:
         app.run(

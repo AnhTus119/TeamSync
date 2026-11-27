@@ -24,4 +24,4 @@ with app.app_context():
     from app.academic.random_seed import seed_random
     r = seed_random(projects=max(1, args.projects), tasks=max(1, args.tasks), seed=args.seed, students=max(6, args.students))
 print(f"Đã thêm đợt {r['batch']}: {r['courses']} học phần, {r['projects']} dự án, {r['tasks']} task, {r['submissions']} lần nộp.")
-print('Đăng nhập (mật khẩu 12345): minhanh@gmail.com, thuha@gmail.com, gv2@gmail.com hoặc', ', '.join(r['students'][:3]), '…')
+print('Đăng nhập (mật khẩu 12345): minhanh@sv.teamsync.test, khanhan@gv.teamsync.test hoặc', ', '.join(r['students'][:3]), '…')

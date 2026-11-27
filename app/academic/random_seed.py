@@ -49,12 +49,12 @@ def seed_random(projects=6, tasks=8, seed=None, students=12):
     at = now().replace(second=0, microsecond=0)
     naive = lambda d: d.replace(tzinfo=None)
 
-    teacher = User.query.filter_by(email='gv2@gmail.com').first() or User.query.filter_by(role='instructor').first()
+    teacher = User.query.filter_by(email='khanhan@gv.teamsync.test').first() or User.query.filter_by(role='instructor').first()
     known = [u for u in (User.query.filter_by(email=e).first() for e in
-                         ('minhanh@gmail.com', 'thuha@gmail.com', 'quocbao@gmail.com', 'gialinh@gmail.com')) if u]
+                         ('minhanh@sv.teamsync.test', 'thuha@sv.teamsync.test', 'quocbao@sv.teamsync.test', 'gialinh@sv.teamsync.test')) if u]
     pool = []
     for i in range(students):
-        email = f'rnd{batch}-{i + 1:02}@gmail.com'
+        email = f'rnd{batch}-{i + 1:02}@sv.teamsync.test'
         u = User.query.filter_by(email=email).first()
         if not u:
             u = User(email=email, full_name=f'{rnd.choice(HO)} {rnd.choice(DEM)} {rnd.choice(TEN)}', role='user', password_hash=pw)

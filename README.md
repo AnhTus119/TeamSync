@@ -27,36 +27,21 @@ Không cần Docker, Node, Redis hoặc dịch vụ ngoài. File `.env` không b
 
 ## Tài khoản demo
 
-Mật khẩu tất cả: **12345**.
+Dữ liệu demo là một khoa **Khoa học máy tính**: 12 học phần, 12 giảng viên, 1 quản lý học phần, 72 sinh viên, 46 dự án (khoảng 275 công việc, 217 lần nộp, 200 mục lịch). Ai trong dữ liệu cũng có tài khoản, mật khẩu chung **12345**. Danh sách đầy đủ (học phần, dự án, thành viên, mã sinh viên): [docs/TAI_KHOAN_DEMO.md](docs/TAI_KHOAN_DEMO.md).
 
 | Email | Vai trò |
 |---|---|
-| admin@gmail.com | Quản trị tài khoản |
-| gv1@gmail.com | Giảng viên 8 lớp |
-| sv1@gmail.com | Trưởng nhóm 01 |
-| sv2@gmail.com, sv3@gmail.com | Cùng làm task Thiết kế giao diện đăng nhập |
-| sv4@gmail.com … sv6@gmail.com | Thành viên nhóm 01 |
-| sv7@gmail.com … sv30@gmail.com | Thành viên các nhóm 02–05 |
-| sv31@gmail.com … sv36@gmail.com | Sinh viên chưa có nhóm, dùng thử lập nhóm |
-| gv2@gmail.com | Giảng viên Khánh An, phụ trách 7 học phần demo TSD-01 … TSD-07 |
-| minhanh@gmail.com | Minh Anh: trưởng nhóm Free2do, Không gian thành viên; thành viên 5 dự án khác |
-| thuha@gmail.com | Thu Hà: trưởng nhóm ChatbotAI, Cổng nghiệm thu bàn giao |
-| quocbao@gmail.com | Quốc Bảo: trưởng nhóm Dự án Quản lý CNTT, Bảng điều hành dự án |
-| gialinh@gmail.com | Gia Linh: trưởng nhóm Lịch triển khai Release |
-| annhien@gmail.com | An Nhiên: sinh viên Free2do chưa có nhóm |
+| minhanh@sv.teamsync.test | Nguyễn Minh Anh: trưởng nhóm Free2do và Theo dõi chi tiêu sinh viên; thành viên ChatbotAI, Dự án Quản lý CNTT và 3 dự án khác |
+| thuha@sv.teamsync.test | Trần Thu Hà: trưởng nhóm ChatbotAI, thành viên Free2do (cùng Quốc Bảo làm task Thiết kế màn hình đăng nhập) |
+| quocbao@sv.teamsync.test, gialinh@sv.teamsync.test | Thành viên Free2do |
+| annhien@sv.teamsync.test | Sinh viên Phát triển ứng dụng Web chưa có nhóm (thử tạo dự án) |
+| khanhan@gv.teamsync.test | TS. Nguyễn Khánh An, Phát triển ứng dụng Web (Free2do) |
+| quangminh@gv.teamsync.test | PGS.TS. Phạm Quang Minh, Trí tuệ nhân tạo (ChatbotAI) |
+| thuhang@gv.teamsync.test | TS. Đỗ Thu Hằng, Quản lý dự án CNTT (có bài được chuyển duyệt) |
+| daotao@gv.teamsync.test | Quản lý học phần (nhập danh sách, xếp nhóm ở tất cả học phần) |
+| admin@teamsync.test | Quản trị tài khoản |
 
-Bộ demo thứ hai (Free2do, ChatbotAI, Dự án Quản lý công nghệ thông tin, Không gian thành viên, Lịch triển khai Release, Bảng điều hành dự án, Cổng nghiệm thu bàn giao) có task ở cả bốn trạng thái, bài bị yêu cầu sửa 2 lần, bài chờ duyệt quá 48 giờ, một bài đã chuyển giảng viên và đợt đánh giá chéo đã đóng. Bộ này được thêm một lần vào database cũ hoặc mới khi chạy `run.py` và không ghi đè dữ liệu đã thao tác.
-
-Dữ liệu demo được tạo sẵn khi chạy `run.py` lần đầu: sinh viên có họ tên thật (email vẫn là sv1…sv36), mỗi nhóm có tên dự án và tên đội riêng (ví dụ "Thư viện số Sao Khuê · Đội Phượng Hoàng"), task theo đúng môn, trạng thái/hạn/số lần nộp khác nhau, có tiêu chí minh chứng, bài chuyển giảng viên, đánh giá chéo đã đóng, yêu cầu hỗ trợ và thông báo. Dữ liệu cố định theo seed nên lần nào tạo mới cũng giống nhau. Nếu đã chạy bản cũ, sao lưu rồi xóa thư mục `instance` để nhận dữ liệu mới.
-
-Lớp đầu: **Lập trình Web**. Các lớp còn lại: Phân tích và thiết kế hệ thống, Quản lý dự án CNTT, Cơ sở dữ liệu, Hệ quản trị CSDL, Python, Java, Trí tuệ nhân tạo. Mỗi lớp có 5 nhóm mẫu; lớp Lập trình Web có 5 nhóm × 6 người và sv31…sv36 chưa có nhóm, các lớp khác xếp nhóm 4–7 người khác nhau. Đây là dữ liệu mô phỏng, không kết nối LMS NEU.
-
-## Thêm dữ liệu ngẫu nhiên
-
-Dừng `run.py`, chạy `python seed_random.py` (hoặc cấu hình VS Code **TeamSync: thêm dữ liệu ngẫu nhiên**), rồi chạy lại `run.py`.
-Mỗi lần thêm một đợt: 6 học phần/dự án (mã `RND-<đợt>-<số>`), mỗi dự án 8 task ở đủ trạng thái, nhiều lần nộp, yêu cầu sửa, bài chuyển giảng viên, tiêu chí minh chứng (có tiêu chí ẩn), đánh giá chéo, yêu cầu hỗ trợ, tên dài và việc quá hạn.
-Minh Anh, Thu Hà, Quốc Bảo, Gia Linh được xếp vào nhiều dự án mới; giảng viên là `gv2@gmail.com`. Sinh viên ngẫu nhiên có email `rnd<đợt>-01@gmail.com`… mật khẩu `12345`.
-Tùy chọn: `--projects 10 --tasks 12 --students 20 --seed 42`. Không xóa dữ liệu cũ; muốn làm lại từ đầu thì sao lưu rồi xóa thư mục `instance`.
+Email dùng đuôi `.test` (tên miền dành riêng cho thử nghiệm) nên không trùng địa chỉ thật. Dữ liệu được tạo khi chạy `run.py` lần đầu với database mới; muốn xem dữ liệu mới thì dừng ứng dụng, sao lưu rồi xóa thư mục `instance`. Database đã có dữ liệu khác sẽ không bị nạp chồng. Tạo lại danh sách tài khoản: `python tools/tai_khoan_demo.py`.
 
 ## Dữ liệu và thời gian
 
