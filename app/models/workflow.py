@@ -74,6 +74,8 @@ class ScheduleItem(Entity, db.Model):
     category = db.Column(S(20), nullable=False, default='other')
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
+    # 'ai' = created by AI sắp lịch (may be re-arranged by the next AI run); '' = created by the user.
+    source = db.Column(S(10), nullable=False, default='', server_default='')
 
 class TaskPeerReview(Entity, db.Model):
     """One member's review of one worker on one completed task (1–10 scale, optional comment).

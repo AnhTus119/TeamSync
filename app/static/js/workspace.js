@@ -896,7 +896,7 @@ function scheduleView(x) {
 // Bước 1: nhập mong muốn → máy chủ trả đề xuất (Gemini nếu có key, không thì bộ sinh theo quy tắc).
 // Bước 2: người dùng sửa / bỏ chọn từng dòng → tạo task hoặc mục lịch qua API thông thường.
 const tzOffset = () => new Date().getTimezoneOffset();
-const sourceNote = r => `<p class="small ai-source">${r.source === 'gemini' ? `${AI_ICON} Đề xuất bởi Gemini` : `${AI_ICON} Đề xuất theo quy tắc (chia giai đoạn theo hạn và khối lượng)`}${r.notice ? ' · ' + h(r.notice) : ''}</p>`;
+const sourceNote = r => `<p class="small ai-source">${r.source !== 'rules' ? `${AI_ICON} Đề xuất bởi ${h(r.source_label || 'AI')}` : `${AI_ICON} Đề xuất theo quy tắc (chia giai đoạn theo hạn và khối lượng)`}${r.notice ? ' · ' + h(r.notice) : ''}</p>`;
 function aiDialog(title, intro, placeholder, generate, renderRows, commit) {
   const d = modal(title, `<p class="small muted">${intro}</p><label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="${h(placeholder)}"></textarea></label>
     <div class="form-end"><button type="button" data-ai="generate">${AI_ICON}<span>Tạo đề xuất</span></button></div><div id="ai-result" aria-live="polite"></div>`, null, '', {wide: true});
@@ -956,10 +956,10 @@ function aiPlanModal() {
 const AI_HIST = 'ts-ai-history';
 const aiHistory = () => { try { return JSON.parse(sessionStorage.getItem(AI_HIST)) || {undo: [], redo: []}; } catch { return {undo: [], redo: []}; } };
 const saveAiHistory = x => { try { sessionStorage.setItem(AI_HIST, JSON.stringify(x)); } catch { /* private mode */ } };
-async function createItems(payloads) {
+async function createItems(payloads, record = true) {
   const ids = [];
-  try { for (const b of payloads) ids.push((await api('/workflow/schedule', b)).id); }
-  catch (e) { if (ids.length) { const x = aiHistory(); x.undo.push({ids, payloads: payloads.slice(0, ids.length)}); saveAiHistory(x); } throw e; }  // partial batch stays undoable
+  try { for (const b of payloads) ids.push((await api('/workflow/schedule', {...b, source: 'ai'})).id); }
+  catch (e) { if (record && ids.length) { const x = aiHistory(); x.undo.push({ids, payloads: payloads.slice(0, ids.length)}); saveAiHistory(x); } throw e; }  // partial batch stays undoable
   return ids;
 }
 async function deleteItems(ids) {
@@ -974,26 +974,28 @@ function aiHistoryBar() {
     <button type="button" class="secondary" data-action="ai-undo" ${last ? `title="Xóa ${last.ids.length} mục AI vừa thêm"` : 'disabled title="Chưa có lịch AI để hoàn tác"'}>↶ Hoàn tác</button>
     <button type="button" class="secondary icon-only" data-action="ai-redo" ${next ? `aria-label="Làm lại: thêm lại ${next.payloads.length} mục AI" title="Làm lại: thêm lại ${next.payloads.length} mục AI"` : 'disabled aria-label="Làm lại" title="Chưa có bước nào để làm lại"'}>→</button></div>`;
 }
+// A batch = entries the AI added (ids/payloads) + earlier AI entries it re-arranged (removed).
+// Hoàn tác: delete the added entries and put the earlier ones back. →: the reverse.
 async function aiUndo(btn) {
   const x = aiHistory(), batch = x.undo.pop();
   btn?.closest('.toast')?.remove();
   if (!batch) return;
-  await busy(btn, () => deleteItems(batch.ids));
-  x.redo.push({payloads: batch.payloads}); saveAiHistory(x);
-  await render(); notify(`Đã hoàn tác ${batch.ids.length} mục lịch AI. Bấm → để thêm lại.`);
+  const restored = await busy(btn, async () => { await deleteItems(batch.ids); return (batch.removed || []).length ? createItems(batch.removed, false) : []; });
+  x.redo.push({payloads: batch.payloads, removed: batch.removed || [], restoredIds: restored || []}); saveAiHistory(x);
+  await render(); notify(`Đã hoàn tác lịch AI${(batch.removed || []).length ? ', khôi phục lịch trước đó' : ''}. Bấm → để làm lại.`);
 }
 async function aiRedo(btn) {
   const x = aiHistory(), batch = x.redo.pop();
   if (!batch) return;
-  const ids = await busy(btn, () => createItems(batch.payloads));
-  x.undo.push({ids, payloads: batch.payloads}); saveAiHistory(x);
-  await render(); notify(`Đã thêm lại ${ids.length} mục lịch AI`);
+  const ids = await busy(btn, async () => { await deleteItems(batch.restoredIds || []); return createItems(batch.payloads, false); });
+  x.undo.push({ids, payloads: batch.payloads, removed: batch.removed || []}); saveAiHistory(x);
+  await render(); notify(`Đã áp dụng lại lịch AI (${ids.length} mục)`);
 }
 function aiScheduleModal() {
   const range = `${dm(parseDay(tlData.from))} – ${dm(parseDay(tlData.to))}`;
   if (aiJobs().length) return notify('AI đang sắp lịch cho bạn, xem tiến trình ở góc dưới bên phải.');
-  return modal('AI sắp lịch', `<p class="small muted">AI xếp lịch cá nhân cho khoảng <b>${h(range)}</b> đang xem (từ hôm nay trở đi): công việc được giao, bài chờ bạn duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần, tránh trùng lịch đã có. Bấm Xác nhận là AI chạy nền: bạn có thể đi làm việc khác, khi xong lịch được thêm và có thông báo ở góc dưới bên phải.</p>
-    <label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="Ví dụ: tối thứ 3 và thứ 5 đi làm thêm, muốn ôn thi Cơ sở dữ liệu vào cuối tuần…"></textarea></label>`,
+  return modal('AI sắp lịch', `<p class="small muted">AI xếp lịch cá nhân cho khoảng <b>${h(range)}</b> đang xem (từ hôm nay trở đi): công việc được giao, bài chờ bạn duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần. Lịch AI tạo lần trước trong khoảng này được <b>sắp lại</b> (lịch bạn tự tạo hoặc đã sửa tay giữ nguyên). Bấm Xác nhận là AI chạy nền: bạn có thể đi làm việc khác, xong sẽ có thông báo ở góc dưới bên phải và ở chuông thông báo.</p>
+    <label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="Ví dụ: không xếp lịch ngày 2/12; bận thứ 3 và thứ 5; muốn thêm buổi ôn thi Cơ sở dữ liệu…"></textarea></label>`,
     async f => {
       const job = await api('/workflow/ai-schedule/jobs', {note: String(f.get('note') || '').trim(), tz_offset: tzOffset(), from: tlData.from, to: tlData.to});
       saveAiJobs([...aiJobs(), job.id]);
@@ -1037,12 +1039,16 @@ async function pollAiJobs() {
     catch (e) { if (e.status === 404) { toast('job-' + id, '<b>Không còn theo dõi được tác vụ AI</b><br><small>Máy chủ đã khởi động lại. Hãy chạy AI sắp lịch lại.</small>', {kind: 'error', timeout: 12000}); continue; } left.push(id); continue; }
     if (job.status === 'running') { left.push(id); showJobToast(job); continue; }
     clearCache();  // the server saved new entries: every page must read fresh data
-    if (job.status === 'failed') { toast('job-' + id, `<b>AI sắp lịch thất bại</b><br><small>${h(job.error)}</small>`, {kind: 'error', timeout: 15000}); continue; }
-    if (job.ids.length) { const x = aiHistory(); x.undo.push({ids: job.ids, payloads: job.payloads}); x.redo = []; saveAiHistory(x); }
-    const via = job.source === 'gemini' ? 'Gemini sắp' : 'sắp theo quy tắc';
+    if (job.status === 'failed') { toast('job-' + id, `<b>AI sắp lịch thất bại</b><br><small>${h(job.error)}</small>`, {kind: 'error'}); continue; }
+    if (job.ids.length) { const x = aiHistory(); x.undo.push({ids: job.ids, payloads: job.payloads, removed: job.removed || []}); x.redo = []; saveAiHistory(x); }
+    const via = job.source !== 'rules' ? `${job.source_label || 'AI'} sắp` : 'sắp theo quy tắc';
+    const span = `${dm(parseDay(job.from))} – ${dm(parseDay(job.to))}`;
+    const extra = [(job.removed || []).length ? `thay ${job.removed.length} mục AI cũ` : '', (job.blocked || []).length ? `đã tránh ${job.blocked.join(', ')}` : ''].filter(Boolean).join(' · ');
+    // The result stays until the user closes it, so it is still there when they come back.
     toast('job-' + id, job.ids.length
-      ? `<div><b>Đã thêm ${job.ids.length} mục lịch</b> (${via})<br>${job.notice ? `<small>${h(job.notice)}</small><br>` : ''}<a href="/timeline?view=created&from=${h(job.from)}">Xem lịch</a> · <button type="button" class="link-btn" data-action="ai-undo">Hoàn tác</button></div>`
-      : `<div><b>Không có lịch mới</b><br><small>${h(job.notice || 'Không có việc mới cần xếp.')}</small></div>`, {kind: job.ids.length ? 'ok' : '', timeout: 20000});
+      ? `<div><b>AI đã sắp xong lịch ${h(span)}</b><br><small>${job.ids.length} mục (${via})${extra ? ' · ' + h(extra) : ''}</small>${job.notice ? `<br><small>${h(job.notice)}</small>` : ''}<br><a href="/timeline?view=created&from=${h(job.from)}">Xem lịch</a> · <button type="button" class="link-btn" data-action="ai-undo">Hoàn tác</button></div>`
+      : `<div><b>AI sắp lịch xong: không có lịch mới</b><br><small>${h(job.notice || 'Không có việc mới cần xếp.')}</small></div>`, {kind: job.ids.length ? 'ok' : ''});
+    updateUnread();
     if (location.pathname === '/timeline' && !document.querySelector('dialog[open]')) attempt(() => render());
   }
   saveAiJobs(left);

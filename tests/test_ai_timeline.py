@@ -128,7 +128,10 @@ def test_ai_schedule_background_job_saves_entries(app):
         if again['status'] != 'running':
             break
         time.sleep(0.1)
-    assert again['status'] == 'done' and again['ids'] == [] and again['notice']  # nothing added twice
+    # a second run re-arranges the AI entries of the window instead of adding duplicates
+    assert again['status'] == 'done' and len(again['removed']) == len(job['ids'])
+    ai = [x for x in c.req(f'/workflow/schedule?view=created&from={lo.isoformat()}&to={hi.isoformat()}')['items'] if x['source'] == 'ai']
+    assert sorted(x['id'] for x in ai) == sorted(again['ids'])
 
 
 def test_ai_schedule_compact_prompt_and_overload_retry(app):
@@ -159,3 +162,74 @@ def test_ai_schedule_compact_prompt_and_overload_retry(app):
     with mock.patch('app.academic.ai_plan.time_module.sleep'), mock.patch('app.academic.ai_plan.requests.post', return_value=busy):
         r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
     assert r['source'] == 'rules' and 'quá tải' in r['notice']
+
+
+def wait_job(c, job):
+    import time
+    for _ in range(100):
+        job = c.req('/workflow/ai-jobs/' + job['id'])
+        if job['status'] != 'running':
+            return job
+        time.sleep(0.1)
+    return job
+
+
+def test_ai_reschedule_respects_blocked_day_keeps_manual_entries(app):
+    """'không xếp lịch vào ngày …' is enforced; earlier AI entries are re-arranged; hand-made entries stay; no invented tasks."""
+    from datetime import date, timedelta
+    c = Client(app, TH)
+    lo = date.today() + timedelta(days=1); hi = lo + timedelta(days=13)
+    first = wait_job(c, c.req('/workflow/ai-schedule/jobs', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat()}, code=202))
+    assert first['ids']
+    days = sorted({x['start'] for x in first['payloads']})
+    block = date.fromisoformat(days[0])
+    mine = c.req('/workflow/schedule', {'title': 'Lịch tự tạo', 'category': 'personal', 'start': block.isoformat(), 'end': block.isoformat()}, code=201)
+    note = f'không xếp lịch vào ngày {block.day}/{block.month}'
+    second = wait_job(c, c.req('/workflow/ai-schedule/jobs', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat(), 'note': note}, code=202))
+    assert second['status'] == 'done' and second['blocked'] == [block.strftime('%d/%m')]
+    assert len(second['removed']) == len(first['ids'])  # the old AI plan was replaced, not kept
+    items = c.req(f'/workflow/schedule?view=created&from={lo.isoformat()}&to={hi.isoformat()}')['items']
+    ai = [x for x in items if x['source'] == 'ai']
+    assert ai and all(not (x['start'] <= block.isoformat() <= x['end']) for x in ai)  # nothing on the blocked day
+    assert any(x['id'] == mine['id'] for x in items)  # hand-made entry untouched
+    assert all(x['title'].split(':')[0] in ('Làm', 'Duyệt bài', 'Đánh giá chéo', 'Chuẩn bị nộp bài', 'Rà soát tiến độ tuần') for x in ai)  # no invented task
+    bell = c.req('/workflow/home')  # the job result is also queued for the bell
+    from app.models.academic import OutboxEvent
+    with app.app_context():
+        assert OutboxEvent.query.filter_by(event_type='ai.schedule').count() >= 2
+
+
+def test_fallback_to_groq_then_openrouter_free_qwen(app):
+    """Gemini overloaded → Groq (Qwen) answers; without Groq, OpenRouter picks a free Qwen model from its list."""
+    import json
+    from app.academic import ai_plan
+    ai_plan._model_cache.clear()
+    c = Client(app, TH)
+    rules = c.req('/workflow/ai-schedule', {'tz_offset': -420})
+    lo = rules['from']
+    answer = '<think>sắp xếp…</think>```json\n' + json.dumps({'x': [[1, lo, lo]], 'them': []}) + '\n```'
+    busy = mock.Mock(status_code=503); busy.json.return_value = {}
+    ok = mock.Mock(status_code=200); ok.json.return_value = {'choices': [{'message': {'content': answer}}]}
+    def post(url, **kw):
+        return busy if 'generativelanguage' in url else ok
+    app.config.update(GEMINI_API_KEY='g', GROQ_API_KEY='q', GROQ_MODEL='qwen/qwen3-32b', OPENROUTER_API_KEY='')
+    with mock.patch('app.academic.ai_plan.time_module.sleep'), mock.patch('app.academic.ai_plan.requests.post', side_effect=post) as p:
+        r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
+    assert r['source'] == 'groq' and r['source_label'] == 'Groq' and r['items']
+    groq_call = [x for x in p.call_args_list if 'groq' in x.args[0]][0]
+    assert groq_call.kwargs['json']['model'] == 'qwen/qwen3-32b' and groq_call.kwargs['headers']['Authorization'] == 'Bearer q'
+    # OpenRouter: model list read from the provider, free Qwen preferred, paid models ignored
+    listing = mock.Mock(); listing.json.return_value = {'data': [
+        {'id': 'openai/gpt-5', 'pricing': {'prompt': '0.00001', 'completion': '0.00003'}},
+        {'id': 'google/gemma-4-31b-it:free', 'pricing': {'prompt': '0', 'completion': '0'}},
+        {'id': 'qwen/qwen3-235b-a22b:free', 'pricing': {'prompt': '0', 'completion': '0'}}]}
+    app.config.update(GEMINI_API_KEY='', GROQ_API_KEY='', OPENROUTER_API_KEY='o', OPENROUTER_MODEL='')
+    with mock.patch('app.academic.ai_plan.requests.get', return_value=listing), \
+         mock.patch('app.academic.ai_plan.requests.post', return_value=ok) as p:
+        r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
+    assert r['source'] == 'openrouter' and p.call_args.kwargs['json']['model'] == 'qwen/qwen3-235b-a22b:free'
+    # everything fails → rules, and the notice names each service
+    app.config.update(GEMINI_API_KEY='g', GROQ_API_KEY='q', OPENROUTER_API_KEY='')
+    with mock.patch('app.academic.ai_plan.time_module.sleep'), mock.patch('app.academic.ai_plan.requests.post', return_value=busy):
+        r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
+    assert r['source'] == 'rules' and 'Gemini:' in r['notice'] and 'Groq:' in r['notice'] and 'quá tải' in r['notice']

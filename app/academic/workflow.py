@@ -97,6 +97,8 @@ def finish_departure(p,x):
     if x.leader_exit:
         if remaining:
             successor=secrets.choice(remaining);successor.role='leader';x.successor_id=successor.user_id
+            from .notifications import leader_changed
+            leader_changed(p,successor.user_id,x.user_id)
         else:p.status='archived'
     x.status='approved';x.resolved_at=now();p.version+=1
     # Open work stays visible; reassignment is explicit, submitted rosters stay unchanged.

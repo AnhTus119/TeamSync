@@ -37,6 +37,11 @@ class Config:
     # AI lập kế hoạch/timeline: Google Gemini (gói miễn phí). Không có key thì dùng bộ sinh theo quy tắc.
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    # Dự phòng khi Gemini quá tải (đều có gói miễn phí, dùng chuẩn OpenAI). Không đặt model thì tự chọn model đang có (ưu tiên Qwen).
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "")
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     SSO_ALLOWED_DOMAINS = [x.strip().lower() for x in os.getenv("SSO_ALLOWED_DOMAINS", "").split(",") if x.strip()]

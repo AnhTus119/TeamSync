@@ -71,7 +71,7 @@ def dispatch_outbox():
                             Notification(
                                 recipient_id=uid,
                                 event_id=e.id,
-                                title={
+                                title=e.payload.get("title") or {
                                     "group.invited": "Lời mời tham gia nhóm",
                                     "group.invitation_responded": "Lời mời nhóm có phản hồi",
                                     "submission.pending": "Có bản nộp chờ duyệt",

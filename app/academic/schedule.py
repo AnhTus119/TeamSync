@@ -32,7 +32,7 @@ def item_dto(x, editable):
     return {'id': x.id, 'kind': 'item', 'title': x.title, 'note': x.note, 'category': x.category,
             'start': x.start_date.isoformat(), 'end': x.end_date.isoformat(), 'project_id': x.project_id,
             'project_name': p.name if p else '', 'course_id': course_of(p), 'owner_id': x.owner_id,
-            'owner_name': user_brief(x.owner_id)['full_name'], 'editable': editable, 'version': x.version}
+            'owner_name': user_brief(x.owner_id)['full_name'], 'editable': editable, 'version': x.version, 'source': x.source}
 
 
 def milestones(uid, lo, hi):
@@ -90,6 +90,8 @@ def apply(x, b, creating=False):
         x.start_date, x.end_date = start, end
     if 'project_id' in b:
         x.project_id = shareable(integer(b['project_id'])).id if b['project_id'] else None
+    if creating:
+        x.source = 'ai' if b.get('source') == 'ai' else ''
 
 
 def register(bp):
@@ -155,4 +157,5 @@ def register(bp):
         b = json_body()
         version(x, b)
         apply(x, b)
+        x.source = ''  # edited by hand: the next AI run keeps it as it is
         return item_dto(x, True)

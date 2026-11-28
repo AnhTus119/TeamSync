@@ -34,6 +34,16 @@ def prepare():
     with app.app_context():
         upgrade(directory=str(ROOT / "migrations"))
         seed_demo()
+        from app.extensions import db
+        from app.models.academic import RuntimeSetting
+        from app.academic.workflow_seed import KEY
+        if not db.session.get(RuntimeSetting, KEY):
+            print(
+                "CẢNH BÁO: database " + str(INSTANCE / "teamsync-workspace.db") + " không phải dữ liệu demo hiện tại,"
+                " nên các tài khoản trong README (mật khẩu 12345) có thể không đăng nhập được.\n"
+                "  Kiểm tra: python tools/kiem_tra_tai_khoan.py\n"
+                "  Tạo lại dữ liệu demo: tắt run.py, đổi tên thư mục instance (để sao lưu) rồi chạy lại run.py."
+            )
 
 
 def background_worker(stop):
