@@ -201,10 +201,21 @@ hạn tăng dần theo giai đoạn, nằm trong khoảng ngày trên. Định d
 
 
 # ---------------------------------------------------------------- personal schedule
-def personal_context(uid, tz):
-    """Open work of the user: assigned tasks, reviews waiting for them and pending peer reviews."""
+def window_of(body, tz):
+    """Planning window = the date range shown on the Timeline (never before today), max 60 days."""
+    today = local_today(tz)
+    lo = parse_day(body.get('from')) or today
+    hi = parse_day(body.get('to')) or lo + timedelta(days=HORIZON - 1)
+    lo = max(lo, today)
+    hi = min(max(hi, lo), lo + timedelta(days=59))
+    return today, lo, hi
+
+
+def personal_context(uid, tz, lo, hi):
+    """Work of the user that falls in [lo, hi]: assigned tasks, reviews waiting for them, pending peer
+    reviews, course deadlines, and a weekly progress check per active project."""
     from .evidence import queue_data
-    from .task_review import is_open, workers, reviewers
+    from .task_review import is_open, workers, reviewers, closes_at
     today = local_today(tz)
     pids = my_project_ids(uid)
     work = []
@@ -212,67 +223,91 @@ def personal_context(uid, tz):
             .filter(TaskParticipant.user_id == uid, Task.status.in_(['todo', 'in_progress'])).order_by(Task.due_at).all())
     for t in rows:
         p = db.session.get(Project, t.project_id)
-        if p and p.id in pids and p.status == 'active' and membership(p.id, uid):
-            work.append({'kind': 'task', 'title': t.title, 'project_id': p.id, 'project_name': p.name, 'points': t.points or 1,
-                         'due': t.due_at.astimezone(tz).date().isoformat()})
-    for r in queue_data()['to_review']:
-        work.append({'kind': 'review', 'title': r['task_title'], 'project_id': r['project_id'], 'project_name': r['project_name'],
-                     'points': 1, 'due': (today + timedelta(days=2)).isoformat()})
+        due = t.due_at.astimezone(tz).date()
+        if p and p.id in pids and p.status == 'active' and membership(p.id, uid) and due >= lo:
+            work.append({'kind': 'task', 'title': t.title, 'project_id': p.id, 'project_name': p.name, 'points': t.points or 1, 'due': due.isoformat()})
+    if lo <= today + timedelta(days=2):
+        for r in queue_data()['to_review']:
+            work.append({'kind': 'review', 'title': r['task_title'], 'project_id': r['project_id'], 'project_name': r['project_name'],
+                         'points': 1, 'due': (today + timedelta(days=2)).isoformat()})
     for pid in pids:
-        if not membership(pid, uid):
+        p = db.session.get(Project, pid)
+        if not p or p.status != 'active' or not membership(pid, uid):
             continue
         for t in Task.query.filter_by(project_id=pid, status='done'):
             if is_open(t) and uid not in workers(t) and uid in reviewers(t) and \
                     TaskPeerReview.query.filter_by(task_id=t.id, reviewer_id=uid).count() < len(workers(t)):
-                from .task_review import closes_at
-                p = db.session.get(Project, pid)
-                work.append({'kind': 'peer', 'title': t.title, 'project_id': pid, 'project_name': p.name, 'points': 1,
-                             'due': (closes_at(t).astimezone(tz).date() - timedelta(days=1)).isoformat()})
+                due = closes_at(t).astimezone(tz).date() - timedelta(days=1)
+                if due >= lo:
+                    work.append({'kind': 'peer', 'title': t.title, 'project_id': pid, 'project_name': p.name, 'points': 1, 'due': due.isoformat()})
+        a = db.session.get(Assignment, p.assignment_id)
+        if a and a.due_at:
+            due = a.due_at.astimezone(tz).date()
+            if lo <= due <= hi + timedelta(days=3):
+                work.append({'kind': 'final', 'title': a.title, 'project_id': pid, 'project_name': p.name, 'points': 3, 'due': due.isoformat()})
+            last_week = min(hi, due)
+        else:
+            last_week = hi
+        d = lo + timedelta(days=(4 - lo.weekday()) % 7)  # Fridays in the window
+        while d <= last_week:
+            work.append({'kind': 'weekly', 'title': p.name, 'project_id': pid, 'project_name': p.name, 'points': 1, 'due': d.isoformat()})
+            d += timedelta(days=7)
     busy = [{'title': x.title, 'start': x.start_date.isoformat(), 'end': x.end_date.isoformat()}
-            for x in ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= today,
-                                               ScheduleItem.start_date <= today + timedelta(days=HORIZON))]
-    return today, work, busy
+            for x in ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= lo, ScheduleItem.start_date <= hi)]
+    return work, busy
 
 
-def rule_schedule(today, work):
-    last = today + timedelta(days=HORIZON - 1)
+def rule_schedule(lo, hi, work, busy):
     per_day = {}
+    for b in busy:
+        s, e = date.fromisoformat(b['start']), date.fromisoformat(b['end'])
+        for i in range((e - s).days + 1):
+            per_day[s + timedelta(days=i)] = per_day.get(s + timedelta(days=i), 0) + 1
     out = []
     span_for = {1: 1, 2: 2, 3: 2, 5: 3}
-    for w in sorted(work, key=lambda w: w['due']):
-        due = min(max(date.fromisoformat(w['due']), today), last)
+    order = {'review': 0, 'peer': 1, 'task': 2, 'final': 3, 'weekly': 4}
+    for w in sorted(work, key=lambda w: (w['due'], order[w['kind']])):
+        due = date.fromisoformat(w['due'])
         if w['kind'] == 'task':
-            end = max(today, due - timedelta(days=1)) if due > today else today
+            end = min(max(lo, due - timedelta(days=1)), hi)
             length = span_for.get(w['points'], 2)
-            start = max(today, end - timedelta(days=length - 1))
-            # Keep at most two planned blocks per day: move earlier when the day is full.
-            while start > today and any(per_day.get(start + timedelta(days=i), 0) >= 2 for i in range((end - start).days + 1)):
+            start = max(lo, end - timedelta(days=length - 1))
+            # At most two planned blocks per day: move earlier when the days are full.
+            while start > lo and any(per_day.get(start + timedelta(days=i), 0) >= 2 for i in range((end - start).days + 1)):
                 start -= timedelta(days=1)
                 end -= timedelta(days=1)
             title, cat = f'Làm: {w["title"]}', 'study'
             note = f'Hoàn thành trước hạn {due.strftime("%d/%m")} để còn thời gian rà soát và nộp.'
         elif w['kind'] == 'review':
-            start = end = today if per_day.get(today, 0) < 2 else min(today + timedelta(days=1), last)
+            start = end = lo if per_day.get(lo, 0) < 2 else min(lo + timedelta(days=1), hi)
             title, cat, note = f'Duyệt bài: {w["title"]}', 'review', 'Bài nộp đang chờ bạn duyệt.'
+        elif w['kind'] == 'peer':
+            start = end = min(max(lo, due - timedelta(days=1)), hi)
+            title, cat, note = f'Đánh giá chéo: {w["title"]}', 'review', 'Phiếu đánh giá chéo đóng sau 7 ngày kể từ khi công việc hoàn thành.'
+        elif w['kind'] == 'final':
+            end = min(max(lo, due - timedelta(days=1)), hi)
+            start = max(lo, end - timedelta(days=2))
+            title, cat, note = f'Chuẩn bị nộp bài: {w["title"]}', 'deadline', f'Rà soát sản phẩm và báo cáo nhóm trước hạn nộp {due.strftime("%d/%m")}.'
         else:
-            start = end = max(today, due - timedelta(days=1)) if due > today else today
-            title, cat, note = f'Đánh giá chéo: {w["title"]}', 'review', 'Phiếu đánh giá chéo đang mở, đóng sau 7 ngày kể từ khi công việc hoàn thành.'
+            start = end = min(due, hi)
+            title, cat, note = f'Rà soát tiến độ tuần: {w["title"]}', 'meeting', 'Cập nhật việc đã xong, việc trễ và phân công tuần tới.'
+        if start > hi or end < lo:
+            continue
         for i in range((end - start).days + 1):
             d = start + timedelta(days=i)
             per_day[d] = per_day.get(d, 0) + 1
         out.append({'title': title[:200], 'category': cat, 'start': start.isoformat(), 'end': end.isoformat(),
                     'note': note, 'project_id': w['project_id'], 'project_name': w['project_name']})
-    return out[:MAX_ITEMS]
+    return out
 
 
-def ai_schedule(today, work, busy, note, projects):
-    last = today + timedelta(days=HORIZON - 1)
+def ai_schedule(lo, hi, work, busy, note, projects):
     prompt = f"""Bạn là trợ lý sắp lịch học tập cho một sinh viên. Trả lời bằng tiếng Việt, CHỈ trả JSON.
-Hôm nay: {today.isoformat()}. Chỉ xếp lịch từ hôm nay tới {last.isoformat()}.
-Việc cần làm (kind: task=công việc được giao, review=bài chờ duyệt, peer=phiếu đánh giá chéo; due=hạn): {json.dumps(work, ensure_ascii=False)}
+Chỉ xếp lịch trong khoảng từ {lo.isoformat()} tới {hi.isoformat()}.
+Việc cần làm (kind: task=công việc được giao, review=bài chờ duyệt, peer=phiếu đánh giá chéo, final=hạn nộp đề bài, weekly=gợi ý rà soát tuần; due=hạn): {json.dumps(work, ensure_ascii=False)}
 Lịch đã có (tránh trùng, tránh quá tải): {json.dumps(busy, ensure_ascii=False)}
 Mong muốn của sinh viên: {note or '(không có)'}
-Yêu cầu: tối đa {MAX_ITEMS} mục, mỗi mục kết thúc trước hạn của việc đó, mỗi ngày không quá 2 mục, có thể thêm mục tự học/ôn tập nếu sinh viên yêu cầu.
+Yêu cầu: tối đa {MAX_ITEMS} mục, mỗi mục kết thúc trước hạn của việc đó, mỗi ngày không quá 2 mục, thêm mục tự học/ôn tập nếu sinh viên yêu cầu.
 category thuộc {EDITABLE}. project_id lấy từ việc tương ứng hoặc null. Định dạng:
 {{"items":[{{"title":"...","category":"study","start":"YYYY-MM-DD","end":"YYYY-MM-DD","note":"...","project_id":<id hoặc null>}}]}}"""
     data = gemini(prompt)
@@ -285,7 +320,7 @@ category thuộc {EDITABLE}. project_id lấy từ việc tương ứng hoặc n
         s, e = parse_day(x.get('start')), parse_day(x.get('end') or x.get('start'))
         if not title or not s or not e:
             continue
-        s, e = max(s, today), min(e, last)
+        s, e = max(s, lo), min(e, hi)
         if e < s or (e - s).days >= 60:
             continue
         pid = x.get('project_id') if x.get('project_id') in names else None
@@ -322,14 +357,19 @@ def register(bp):
         b = json_body()
         tz, note = tz_of(b), note_of(b)
         uid = current_user().id
-        today, work, busy = personal_context(uid, tz)
+        today, lo, hi = window_of(b, tz)
+        work, busy = personal_context(uid, tz, lo, hi)
         projects = []
         for pid in sorted(my_project_ids(uid)):
             p = db.session.get(Project, pid)
             if p and p.status != 'archived':
                 projects.append({'id': p.id, 'name': p.name})
-        if not work and not note:
-            return {'items': [], 'source': 'rules', 'notice': 'Bạn chưa có việc nào đang mở để sắp lịch. Hãy nhập mong muốn (ví dụ: ôn thi môn X tuần này).',
-                    'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
-        items, source, notice = run(lambda: ai_schedule(today, work, busy, note, projects), lambda: rule_schedule(today, work))
-        return {'items': items, 'source': source, 'notice': notice, 'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
+        items, source, notice = run(lambda: ai_schedule(lo, hi, work, busy, note, projects), lambda: rule_schedule(lo, hi, work, busy))
+        # Never propose an entry the user already has in this window (same title).
+        mine = ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= lo, ScheduleItem.start_date <= hi).all()
+        taken = {y.title.strip().lower() for y in mine}
+        items = [x for x in items if x['title'].strip().lower() not in taken][:MAX_ITEMS]
+        if not items and not notice:
+            notice = f'Không có việc mới cần xếp từ {lo.strftime("%d/%m")} đến {hi.strftime("%d/%m")}.'
+        return {'items': items, 'source': source, 'notice': notice, 'from': lo.isoformat(), 'to': hi.isoformat(),
+                'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
