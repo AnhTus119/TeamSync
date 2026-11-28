@@ -61,7 +61,8 @@ def main():
         elif bad:
             print(f'-> {len(bad)} tài khoản sai mật khẩu hoặc bị khóa. Chạy lại với --sua để đặt lại mật khẩu {PASSWORD}.')
         if missing:
-            print('-> Database này không phải dữ liệu demo hiện tại (thường do chép thư mục instance từ bản cũ).')
+            print('-> Database này không phải dữ liệu demo hiện tại (thường do chép thư mục instance hoặc đã chạy bản cũ).')
+            print('   Database demo cũ (tài khoản @gmail.com) được run.py tự sao lưu và thay bằng demo mới khi khởi động.')
             print('   Muốn có đúng các tài khoản trong README: tắt run.py, đổi tên thư mục instance (ví dụ instance-cu) để sao lưu,')
             print('   rồi chạy lại "python run.py": database mới và dữ liệu demo được tạo tự động.')
         if not missing and not bad:
