@@ -56,6 +56,12 @@ def test_ai_plan_uses_gemini_and_validates_output(app):
     with mock.patch('app.academic.ai_plan.requests.post', side_effect=[missing, fake]) as post:
         r = Client(app, MA).req(f'/workflow/projects/{d["pid"]}/ai-plan', {})
     assert r['source'] == 'gemini' and post.call_count == 2
+    first = post.call_args_list[0].kwargs['json']['generationConfig']
+    assert first['thinkingConfig'] == {'thinkingBudget': 0}  # gemini-2.5-flash answers without the slow thinking step
+    import requests
+    with mock.patch('app.academic.ai_plan.requests.post', side_effect=requests.ReadTimeout()):
+        r = Client(app, MA).req(f'/workflow/projects/{d["pid"]}/ai-plan', {})
+    assert r['source'] == 'rules' and 'quá lâu' in r['notice']
 
 
 def test_ai_schedule_rules_window_and_no_duplicates(app):
@@ -97,3 +103,59 @@ def test_staff_home_has_referrals_and_group_cards(app):
     assert {'leader', 'member_names', 'done', 'total', 'late', 'help', 'pending_review', 'team_name'} <= set(g)
     assert g['member_names'][0] == g['leader']['full_name']
     assert 'review_rows' not in Client(app, MA).req('/workflow/home')
+
+
+def test_ai_schedule_background_job_saves_entries(app):
+    """AI sắp lịch chạy nền: trả về ngay (202), lưu lịch khi xong; chỉ chủ tác vụ xem được; không chạy chồng."""
+    import time
+    from datetime import date, timedelta
+    c = Client(app, TH)
+    lo = date.today() + timedelta(days=40); hi = lo + timedelta(days=13)
+    job = c.req('/workflow/ai-schedule/jobs', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat()}, code=202)
+    assert job['status'] in ('running', 'done') and 'uid' not in job
+    Client(app, MA).req('/workflow/ai-jobs/' + job['id'], code=404)
+    for _ in range(100):
+        job = c.req('/workflow/ai-jobs/' + job['id'])
+        if job['status'] != 'running':
+            break
+        time.sleep(0.1)
+    assert job['status'] == 'done' and job['ids'] and len(job['ids']) == len(job['payloads'])
+    created = c.req(f'/workflow/schedule?view=created&from={lo.isoformat()}&to={hi.isoformat()}')['items']
+    assert set(job['ids']) <= {x['id'] for x in created}
+    again = c.req('/workflow/ai-schedule/jobs', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat()}, code=202)
+    for _ in range(100):
+        again = c.req('/workflow/ai-jobs/' + again['id'])
+        if again['status'] != 'running':
+            break
+        time.sleep(0.1)
+    assert again['status'] == 'done' and again['ids'] == [] and again['notice']  # nothing added twice
+
+
+def test_ai_schedule_compact_prompt_and_overload_retry(app):
+    """Gemini only receives numbered work (no titles/names) and returns [number, start, end]; 503 is retried."""
+    import json
+    from datetime import date, timedelta
+    app.config['GEMINI_API_KEY'] = 'test-key'
+    c = Client(app, TH)
+    rules = c.req('/workflow/ai-schedule', {'tz_offset': -420})  # rules first, to know the window and its work
+    app.config['GEMINI_API_KEY'] = 'test-key'
+    lo = date.fromisoformat(rules['from'])
+    answer = {'x': [[1, lo.isoformat(), lo.isoformat()], [1, lo.isoformat(), lo.isoformat()], [999, lo.isoformat(), lo.isoformat()]],
+              'them': [['Ôn thi Cơ sở dữ liệu', (lo + timedelta(days=1)).isoformat(), (lo + timedelta(days=1)).isoformat()]]}
+    ok = mock.Mock(status_code=200); ok.raise_for_status.return_value = None
+    ok.json.return_value = {'candidates': [{'content': {'parts': [{'text': json.dumps(answer)}]}}]}
+    busy = mock.Mock(status_code=503); busy.json.return_value = {'error': {'message': 'high demand'}}
+    with mock.patch('app.academic.ai_plan.time_module.sleep') as sleep, \
+         mock.patch('app.academic.ai_plan.requests.post', side_effect=[busy, ok]) as post:
+        r = c.req('/workflow/ai-schedule', {'tz_offset': -420, 'note': 'muốn ôn thi'})
+    assert post.call_count == 2 and sleep.called  # overloaded once, retried
+    prompt = post.call_args.kwargs['json']['contents'][0]['parts'][0]['text']
+    assert '1|' in prompt and 'Đánh giá chéo:' not in prompt and 'Free2do' not in prompt  # numbers only, no titles / project names
+    assert r['source'] == 'gemini'
+    titles = [x['title'] for x in r['items']]
+    assert len([t for t in titles if t != 'Ôn thi Cơ sở dữ liệu']) == 1  # duplicate number and unknown number ignored
+    assert 'Ôn thi Cơ sở dữ liệu' in titles
+    assert all(x['start'] >= rules['from'] for x in r['items'])
+    with mock.patch('app.academic.ai_plan.time_module.sleep'), mock.patch('app.academic.ai_plan.requests.post', return_value=busy):
+        r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
+    assert r['source'] == 'rules' and 'quá tải' in r['notice']

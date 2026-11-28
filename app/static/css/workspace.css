@@ -516,3 +516,18 @@ dialog.wide:has(.ai-table){width:min(1080px,calc(100vw - 32px))}
 #view[aria-busy="true"]{pointer-events:none}
 .ai-history{display:inline-flex;gap:6px}
 .ai-history .icon-only{min-width:40px;font-size:17px;line-height:1;padding-left:10px;padding-right:10px}
+
+/* ---------- Thông báo góc dưới bên phải (tác vụ AI chạy nền) ---------- */
+#toasts{position:fixed;right:20px;bottom:20px;z-index:70;display:flex;flex-direction:column;gap:10px;width:min(360px,calc(100vw - 32px))}
+.toast{display:flex;align-items:flex-start;gap:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--harbor);border-radius:12px;box-shadow:0 12px 30px rgba(54,62,79,.18);padding:12px 12px 12px 14px;font-size:14px}
+.toast.ok{border-left-color:var(--good)}
+.toast.error{border-left-color:var(--bad)}
+.toast .toast-body{flex:1;display:flex;gap:10px;align-items:flex-start;min-width:0}
+.toast small{color:var(--muted)}
+.toast a{font-weight:600}
+.toast .link-btn{padding:0;border:0;background:none;color:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.toast-close{border:0;background:none;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;padding:0 2px}
+.spinner{width:18px;height:18px;flex:0 0 18px;border-radius:50%;border:2.5px solid var(--santorini);border-top-color:var(--midnight);animation:spin .9s linear infinite;margin-top:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+.ai-history button:disabled{opacity:.45;cursor:not-allowed}
