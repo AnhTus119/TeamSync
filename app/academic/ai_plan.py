@@ -28,7 +28,9 @@ HORIZON = 28
 
 
 class AIUnavailable(Exception):
-    pass
+    def __init__(self, reason, detail=''):
+        super().__init__(reason)
+        self.reason, self.detail = reason, detail
 
 
 # ---------------------------------------------------------------- helpers
@@ -64,29 +66,59 @@ def note_of(body):
     return v.strip()
 
 
+FALLBACK_MODELS = ('gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash')
+
+
+def google_error(r):
+    """Short human reason from a Gemini error response (never contains the key)."""
+    try:
+        e = r.json().get('error', {})
+        msg, status = str(e.get('message') or '')[:200], e.get('status') or ''
+    except Exception:
+        msg, status = '', ''
+    if r.status_code in (400, 401, 403) and ('API key' in msg or status in ('UNAUTHENTICATED', 'PERMISSION_DENIED') or 'API_KEY' in msg):
+        return 'key', 'API key không hợp lệ hoặc chưa bật Gemini API cho key này. Tạo lại key tại aistudio.google.com/apikey (key thường bắt đầu bằng “AIza”).'
+    if r.status_code == 400 and 'location' in msg.lower():
+        return 'error', 'Gemini chưa hỗ trợ khu vực mạng hiện tại.'
+    return 'error', f'Gemini báo lỗi {r.status_code}' + (f': {msg}' if msg else '')
+
+
 def gemini(prompt):
-    key = current_app.config.get('GEMINI_API_KEY')
+    key = (current_app.config.get('GEMINI_API_KEY') or '').strip().strip('"').strip("'")
     if not key:
         raise AIUnavailable('no-key')
-    model = current_app.config.get('GEMINI_MODEL') or 'gemini-2.5-flash'
-    try:
-        r = requests.post(GEMINI_URL.format(model=model), headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
-                          json={'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
-                                'generationConfig': {'temperature': 0.4, 'responseMimeType': 'application/json'}}, timeout=25)
+    configured = (current_app.config.get('GEMINI_MODEL') or '').strip()
+    models = list(dict.fromkeys([m for m in (configured, *FALLBACK_MODELS) if m]))
+    body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
+            'generationConfig': {'temperature': 0.4, 'responseMimeType': 'application/json'}}
+    last = ('error', '')
+    for model in models:
+        try:
+            r = requests.post(GEMINI_URL.format(model=model), headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
+                              json=body, timeout=25)
+        except requests.RequestException as e:
+            log.warning('Gemini request failed: %s', type(e).__name__)
+            raise AIUnavailable('error', 'Không kết nối được tới Gemini (kiểm tra mạng / tường lửa).')
+        if r.status_code == 404:  # model name not available for this key: try the next one
+            last = ('error', f'Không tìm thấy model {model}.')
+            continue
         if r.status_code == 429:
             raise AIUnavailable('quota')
-        r.raise_for_status()
-        text = r.json()['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(text)
-    except AIUnavailable:
-        raise
-    except Exception as e:  # network, HTTP, malformed JSON
-        log.warning('Gemini request failed: %s', e)
-        raise AIUnavailable('error')
+        if r.status_code >= 400:
+            reason, detail = google_error(r)
+            log.warning('Gemini %s: %s', r.status_code, detail)
+            raise AIUnavailable(reason, detail)
+        try:
+            text = r.json()['candidates'][0]['content']['parts'][0]['text']
+            return json.loads(text.strip().removeprefix('```json').removeprefix('```').removesuffix('```'))
+        except Exception:
+            raise AIUnavailable('invalid')
+    raise AIUnavailable(*last)
 
 
 NOTICE = {'quota': 'Gemini đã hết lượt miễn phí, kế hoạch được tạo theo quy tắc.',
           'error': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
+          'key': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
           'invalid': 'Gemini trả kết quả không hợp lệ, kế hoạch được tạo theo quy tắc.'}
 
 
@@ -98,7 +130,9 @@ def run(ai, rules):
             return items, 'gemini', ''
         reason = 'invalid'
     except AIUnavailable as e:
-        reason = str(e)
+        reason = e.reason
+        if e.detail:
+            return rules(), 'rules', f'{NOTICE.get(reason, "")} Lý do: {e.detail}'
     return rules(), 'rules', NOTICE.get(reason, '')
 
 
