@@ -47,6 +47,15 @@ def test_ai_plan_uses_gemini_and_validates_output(app):
     with mock.patch('app.academic.ai_plan.requests.post', return_value=mock.Mock(status_code=429)):
         r = Client(app, MA).req(f'/workflow/projects/{d["pid"]}/ai-plan', {})
     assert r['source'] == 'rules' and 'hết lượt' in r['notice'] and r['items']
+    # the reason Google gives is shown (bad key), and an unknown model falls back to the next one
+    bad = mock.Mock(status_code=400); bad.json.return_value = {'error': {'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT'}}
+    with mock.patch('app.academic.ai_plan.requests.post', return_value=bad):
+        r = Client(app, MA).req(f'/workflow/projects/{d["pid"]}/ai-plan', {})
+    assert r['source'] == 'rules' and 'API key không hợp lệ' in r['notice'] and 'test-key' not in r['notice']
+    missing = mock.Mock(status_code=404); missing.json.return_value = {}
+    with mock.patch('app.academic.ai_plan.requests.post', side_effect=[missing, fake]) as post:
+        r = Client(app, MA).req(f'/workflow/projects/{d["pid"]}/ai-plan', {})
+    assert r['source'] == 'gemini' and post.call_count == 2
 
 
 def test_ai_schedule_rules_window_and_no_duplicates(app):
