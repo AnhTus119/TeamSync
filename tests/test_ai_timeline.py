@@ -49,16 +49,23 @@ def test_ai_plan_uses_gemini_and_validates_output(app):
     assert r['source'] == 'rules' and 'hết lượt' in r['notice'] and r['items']
 
 
-def test_ai_schedule_rules_and_saving(app):
+def test_ai_schedule_rules_window_and_no_duplicates(app):
+    from datetime import date, timedelta
     c = Client(app, TH)
     r = c.req('/workflow/ai-schedule', {'tz_offset': -420})
     assert r['source'] == 'rules' and r['items']
     assert any(x['title'].startswith('Đánh giá chéo:') for x in r['items'])  # open per-task review waiting for Thu Hà
     for x in r['items']:
-        assert x['start'] <= x['end'] and x['category'] in ('meeting', 'deadline', 'study', 'review', 'personal', 'other')
-    x = r['items'][0]
-    saved = c.req('/workflow/schedule', {k: x[k] for k in ('title', 'category', 'start', 'end', 'note', 'project_id')}, code=201)
-    assert saved['editable'] and saved['title'] == x['title']
+        assert r['from'] <= x['start'] <= x['end'] <= r['to'] and x['category'] in ('meeting', 'deadline', 'study', 'review', 'personal', 'other')
+    # next month (the window shown on the Timeline) still gets a plan: weekly progress checks / deadline preparation
+    lo = date.fromisoformat(r['from']).replace(day=1) + timedelta(days=32)
+    lo = lo.replace(day=1); hi = lo + timedelta(days=13)
+    nxt = c.req('/workflow/ai-schedule', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat()})
+    assert nxt['items'] and all(lo.isoformat() <= x['start'] and x['end'] <= hi.isoformat() for x in nxt['items'])
+    for x in nxt['items']:
+        c.req('/workflow/schedule', {k: x[k] for k in ('title', 'category', 'start', 'end', 'note', 'project_id')}, code=201)
+    again = c.req('/workflow/ai-schedule', {'tz_offset': -420, 'from': lo.isoformat(), 'to': hi.isoformat()})
+    assert not again['items'] and again['notice']  # nothing proposed twice
     Client(app, 'admin@teamsync.test').req('/workflow/ai-schedule', {}, code=403)
 
 

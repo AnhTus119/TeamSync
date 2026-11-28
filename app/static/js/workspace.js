@@ -571,7 +571,7 @@ async function peerTab(p) {
   const d = await api(`/workflow/projects/${p.id}/peer`);
   window.peerData = d;
   const mine = d.tasks.filter(t => t.can_review), others = d.tasks.filter(t => !t.can_review);
-  return panel('Đánh giá chéo theo công việc', `<p>Khi một công việc được duyệt hoàn thành, các thành viên không làm công việc đó đánh giá người làm theo hai tiêu chí <b>Hợp tác</b> và <b>Chất lượng</b> (thang 1–10), kèm nhận xét nếu muốn. Phiếu mở trong <b>${d.review_days} ngày</b>, được sửa hoặc bỏ qua (không tính là 0). Kết quả chỉ công bố sau khi đóng và không hiển thị người đánh giá.</p>${d.pending ? `<p><span class="badge warn">${d.pending} công việc chờ bạn đánh giá</span></p>` : ''}`) +
+  return (d.pending ? `<p><span class="badge warn">${d.pending} công việc chờ bạn đánh giá</span></p>` : '') +
     (d.members.length ? panel('Tổng hợp theo thành viên (đã công bố)', peerMemberTable(d.members)) : '') +
     (mine.length ? `<h2 class="section-title">Chờ bạn đánh giá</h2>${mine.map(peerTaskCard).join('')}` : '') +
     (others.length ? `<h2 class="section-title">${mine.length ? 'Các công việc khác' : 'Công việc đã hoàn thành'}</h2>${others.map(peerTaskCard).join('')}` : '') +
@@ -786,7 +786,7 @@ async function timelinePage() {
   const filters = d.is_staff && tlView === 'mine' ? `<div class="tl-filters"><select id="tl-course" aria-label="Lọc theo học phần"><option value="">Tất cả học phần</option>${d.courses.map(c => `<option value="${c.id}" ${tlFilter.course === c.id ? 'selected' : ''}>${h(c.title)}</option>`).join('')}</select><select id="tl-project" aria-label="Lọc theo nhóm"><option value="">Tất cả nhóm</option>${d.projects.filter(p => !tlFilter.course || p.course_id === tlFilter.course).map(p => `<option value="${p.id}" ${tlFilter.project === p.id ? 'selected' : ''}>${h(p.name)}</option>`).join('')}</select></div>` : '';
   return `<div class="toolbar tl-toolbar"><nav class="segmented" aria-label="Loại lịch"><a href="/timeline?view=mine" class="seg-link" ${tlView === 'mine' ? 'aria-current="page"' : ''}>Lịch của tôi</a><a href="/timeline?view=created" class="seg-link" ${tlView === 'created' ? 'aria-current="page"' : ''}>Lịch tôi tạo</a></nav>
     <div class="toolbar-right"><div class="tl-nav" role="group" aria-label="Chuyển khoảng ngày">${button('‹ Trước', 'tl-shift:-7', 'secondary')}${button('Hôm nay', 'tl-today', 'secondary')}${button('Sau ›', 'tl-shift:7', 'secondary')}</div><strong class="tl-range">${range}</strong>
-    <button type="button" data-action="ai-schedule" class="secondary ai-btn">${AI_ICON}<span>AI sắp lịch</span></button>
+    ${aiHistoryBar()}<button type="button" data-action="ai-schedule" class="secondary ai-btn">${AI_ICON}<span>AI sắp lịch</span></button>
     ${tlView === 'created' ? `<button type="button" data-action="tl-add" class="create-btn"><span aria-hidden="true">+</span> Thêm lịch</button>` : ''}</div></div>${filters}
     <ul class="tl-legend" aria-label="Chú giải loại lịch">${cats.map(c => `<li><i class="cat-${c.key}"></i>${h(c.label)}</li>`).join('')}</ul>
     <p class="small muted tl-hint">${tlView === 'mine' && d.is_staff ? 'Mốc nộp của các lớp, lịch các nhóm chia sẻ và lịch bạn tạo, chỉ xem. Sửa lịch của bạn ở tab Lịch tôi tạo.' : tlView === 'mine' ? 'Lịch tổng hợp việc được giao, mốc nộp đề bài và lịch được chia sẻ, chỉ xem. Bấm một mục để mở chi tiết; sửa lịch của bạn ở tab Lịch tôi tạo.' : 'Kéo thả để đổi ngày (giữ độ dài), bấm để sửa nội dung và loại. Bấm đúp vào một ngày để thêm lịch. Bàn phím: chọn mục rồi Alt + ←/→ để dời một ngày.'}</p>
@@ -896,7 +896,7 @@ function scheduleView(x) {
 // Bước 1: nhập mong muốn → máy chủ trả đề xuất (Gemini nếu có key, không thì bộ sinh theo quy tắc).
 // Bước 2: người dùng sửa / bỏ chọn từng dòng → tạo task hoặc mục lịch qua API thông thường.
 const tzOffset = () => new Date().getTimezoneOffset();
-const sourceNote = r => `<p class="small ai-source">${r.source === 'gemini' ? `${AI_ICON} Đề xuất bởi Gemini` : `${AI_ICON} Đề xuất theo quy tắc (chia giai đoạn theo hạn và khối lượng)`}${r.notice ? ' · ' + h(r.notice) : ''}${!r.ai_enabled && r.source !== 'gemini' ? ' · Đặt GEMINI_API_KEY trong .env để dùng AI miễn phí.' : ''}</p>`;
+const sourceNote = r => `<p class="small ai-source">${r.source === 'gemini' ? `${AI_ICON} Đề xuất bởi Gemini` : `${AI_ICON} Đề xuất theo quy tắc (chia giai đoạn theo hạn và khối lượng)`}${r.notice ? ' · ' + h(r.notice) : ''}</p>`;
 function aiDialog(title, intro, placeholder, generate, renderRows, commit) {
   const d = modal(title, `<p class="small muted">${intro}</p><label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="${h(placeholder)}"></textarea></label>
     <div class="form-end"><button type="button" data-ai="generate">${AI_ICON}<span>Tạo đề xuất</span></button></div><div id="ai-result" aria-live="polite"></div>`, null, '', {wide: true});
@@ -951,23 +951,54 @@ function aiPlanModal() {
         participants: [{user_id: Number(v('responsible')), role: 'responsible'}]});
     });
 }
+// AI sắp lịch: bấm nút → Xác nhận là lịch được thêm ngay vào khoảng ngày đang xem.
+// Hoàn tác xóa đúng các mục vừa thêm; mũi tên → thêm lại (làm lại) nếu muốn quay về lịch AI.
+const AI_HIST = 'ts-ai-history';
+const aiHistory = () => { try { return JSON.parse(sessionStorage.getItem(AI_HIST)) || {undo: [], redo: []}; } catch { return {undo: [], redo: []}; } };
+const saveAiHistory = x => { try { sessionStorage.setItem(AI_HIST, JSON.stringify(x)); } catch { /* private mode */ } };
+async function createItems(payloads) {
+  const ids = [];
+  try { for (const b of payloads) ids.push((await api('/workflow/schedule', b)).id); }
+  catch (e) { if (ids.length) { const x = aiHistory(); x.undo.push({ids, payloads: payloads.slice(0, ids.length)}); saveAiHistory(x); } throw e; }  // partial batch stays undoable
+  return ids;
+}
+async function deleteItems(ids) {
+  for (const id of ids) {
+    try { await api('/workflow/schedule/' + id, {}, 'DELETE'); } catch (e) { if (e.status !== 404) throw e; }
+  }
+}
+function aiHistoryBar() {
+  const x = aiHistory();
+  if (!x.undo.length && !x.redo.length) return '';
+  const last = x.undo.at(-1), next = x.redo.at(-1);
+  return `<div class="ai-history" role="group" aria-label="Lịch do AI sắp">${last ? `<button type="button" class="secondary" data-action="ai-undo" title="Xóa ${last.ids.length} mục AI vừa thêm">↶ Hoàn tác</button>` : ''}${next ? `<button type="button" class="secondary icon-only" data-action="ai-redo" aria-label="Làm lại: thêm lại ${next.payloads.length} mục AI" title="Làm lại: thêm lại ${next.payloads.length} mục AI">→</button>` : ''}</div>`;
+}
+async function aiUndo(btn) {
+  const x = aiHistory(), batch = x.undo.pop();
+  if (!batch) return;
+  await busy(btn, () => deleteItems(batch.ids));
+  x.redo.push({payloads: batch.payloads}); saveAiHistory(x);
+  await render(); notify(`Đã hoàn tác ${batch.ids.length} mục lịch AI. Bấm → để thêm lại.`);
+}
+async function aiRedo(btn) {
+  const x = aiHistory(), batch = x.redo.pop();
+  if (!batch) return;
+  const ids = await busy(btn, () => createItems(batch.payloads));
+  x.undo.push({ids, payloads: batch.payloads}); saveAiHistory(x);
+  await render(); notify(`Đã thêm lại ${ids.length} mục lịch AI`);
+}
 function aiScheduleModal() {
-  const cats = tlData.categories.filter(c => c.key !== 'task');
-  return aiDialog('AI sắp lịch làm việc', 'AI xếp lịch cá nhân 4 tuần tới từ các công việc được giao, bài chờ bạn duyệt và phiếu đánh giá chéo đang mở, tránh trùng lịch đã có. Kết quả lưu vào tab Lịch tôi tạo.',
-    'Ví dụ: tối thứ 3 và thứ 5 đi làm thêm, muốn ôn thi Cơ sở dữ liệu vào cuối tuần…',
-    note => api('/workflow/ai-schedule', {note, tz_offset: tzOffset()}),
-    r => `<div class="table-wrap ai-table"><table><thead><tr><th scope="col"><span class="sr-only">Chọn</span></th><th scope="col">Nội dung</th><th scope="col">Loại</th><th scope="col">Từ ngày</th><th scope="col">Đến ngày</th><th scope="col">Chia sẻ với dự án</th></tr></thead><tbody>${r.items.map((x, i) => `<tr data-ai-row="${i}">
-      <td><input type="checkbox" data-f="use" checked aria-label="Chọn dòng ${i + 1}"></td>
-      <td><input data-f="title" value="${h(x.title)}" maxlength="200" aria-label="Tiêu đề"><textarea data-f="note" aria-label="Ghi chú">${h(x.note)}</textarea></td>
-      <td><select data-f="category" aria-label="Loại">${cats.map(c => `<option value="${c.key}" ${c.key === x.category ? 'selected' : ''}>${h(c.label)}</option>`).join('')}</select></td>
-      <td><input type="date" data-f="start" value="${x.start}" aria-label="Từ ngày"></td><td><input type="date" data-f="end" value="${x.end}" aria-label="Đến ngày"></td>
-      <td><select data-f="project" aria-label="Chia sẻ"><option value="">Không chia sẻ</option>${tlData.projects.map(p => `<option value="${p.id}">${h(p.name)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>`,
-    async row => {
-      const v = k => row.querySelector(`[data-f=${k}]`).value;
-      if (!v('title').trim() || !v('start')) throw Error('Cần tiêu đề và ngày');
-      if ((v('end') || v('start')) < v('start')) throw Error('Ngày kết thúc phải từ ngày bắt đầu');
-      await api('/workflow/schedule', {title: v('title').trim(), category: v('category'), start: v('start'), end: v('end') || v('start'), note: v('note'), project_id: v('project') ? Number(v('project')) : null});
-    });
+  const range = `${dm(parseDay(tlData.from))} – ${dm(parseDay(tlData.to))}`;
+  return modal('AI sắp lịch', `<p class="small muted">AI xếp lịch cá nhân cho khoảng <b>${h(range)}</b> đang xem (từ hôm nay trở đi): công việc được giao, bài chờ bạn duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần, tránh trùng lịch đã có. Bấm Xác nhận là lịch được thêm ngay; không ưng thì bấm Hoàn tác.</p>
+    <label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="Ví dụ: tối thứ 3 và thứ 5 đi làm thêm, muốn ôn thi Cơ sở dữ liệu vào cuối tuần…"></textarea></label>`,
+    async f => {
+      const r = await api('/workflow/ai-schedule', {note: String(f.get('note') || '').trim(), tz_offset: tzOffset(), from: tlData.from, to: tlData.to});
+      if (!r.items.length) throw Error(r.notice || 'Không có việc mới cần xếp trong khoảng này.');
+      const payloads = r.items.map(x => ({title: x.title, category: x.category, start: x.start, end: x.end, note: x.note || '', project_id: x.project_id || null}));
+      const ids = await createItems(payloads);
+      const x = aiHistory(); x.undo.push({ids, payloads}); x.redo = []; saveAiHistory(x);
+      return `Đã thêm ${ids.length} mục lịch (${r.source === 'gemini' ? 'Gemini sắp' : 'sắp theo quy tắc'})${r.notice ? ' · ' + r.notice : ''}. Không ưng thì bấm Hoàn tác.`;
+    }, 'Xác nhận');
 }
 
 // ------------------------------------------------------------------ Bài nộp
@@ -1215,6 +1246,8 @@ async function action(a, btn) {
   if (key === 'tl-today') return timelineShift(0);
   if (key === 'tl-add') return scheduleForm(null, idText || '');
   if (key === 'ai-schedule') return aiScheduleModal();
+  if (key === 'ai-undo') return aiUndo(btn);
+  if (key === 'ai-redo') return aiRedo(btn);
   if (key === 'ai-plan') return aiPlanModal();
   if (key === 'tl-edit') return scheduleForm(tlData.items.find(x => x.kind === 'item' && x.id === id));
   if (key === 'tl-view') return scheduleView(tlData.items.find(x => x.kind === 'item' && x.id === id));

@@ -369,3 +369,26 @@ def test_browser_member_poster_cards(browser, app):
     page.set_viewport_size({'width': 390, 'height': 844}); page.reload(); page.locator('.member-grid').wait_for()
     assert not page.evaluate('document.documentElement.scrollWidth>innerWidth')
     assert not errors, errors
+
+
+def test_browser_ai_schedule_apply_undo_redo_next_month(browser):
+    """AI sắp lịch: Xác nhận là thêm ngay vào khoảng đang xem; Hoàn tác xóa; → thêm lại."""
+    th, url = login(browser, TH); errors = []; th.on('pageerror', lambda e: errors.append(str(e)))
+    th.goto(url + '/timeline?view=created'); th.locator('#tl-grid').wait_for()
+    for _ in range(2):
+        th.get_by_role('button', name='Sau ›').click(); th.wait_for_url('**from=**'); th.locator('#tl-grid').wait_for()
+    th.wait_for_load_state('networkidle')
+    before = th.locator('#tl-grid .tl-item').count()
+    th.get_by_role('button', name='AI sắp lịch').click(); d = th.get_by_role('dialog')
+    expect(d).not_to_contain_text('GEMINI_API_KEY')
+    d.get_by_role('button', name='Xác nhận').click(); expect(th.get_by_role('dialog')).to_have_count(0)
+    expect(th.locator('#notice')).to_contain_text('Đã thêm')
+    added = th.locator('#tl-grid .tl-item').count(); assert added > before
+    th.get_by_role('button', name='↶ Hoàn tác').click(); expect(th.locator('#notice')).to_contain_text('Đã hoàn tác')
+    expect(th.locator('#tl-grid .tl-item')).to_have_count(before)
+    th.locator('[data-action=ai-redo]').click(); expect(th.locator('#notice')).to_contain_text('Đã thêm lại')
+    expect(th.locator('#tl-grid .tl-item')).to_have_count(added)
+    expect(th.locator('[data-action=ai-redo]')).to_have_count(0); expect(th.get_by_role('button', name='↶ Hoàn tác')).to_be_visible()
+    th.goto(url + '/projects/' + str(th.evaluate("async()=>(await (await fetch('/api/v1/workflow/home')).json()).data.projects[0].id")) + '?tab=peer')
+    expect(th.get_by_role('heading', name='Đánh giá chéo theo công việc')).to_have_count(0)
+    assert not errors, errors

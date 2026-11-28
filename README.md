@@ -87,7 +87,7 @@ Khối trên: Việc cần chú ý với sáu chỉ số và công tắc Cột /
 ## AI hỗ trợ tạo timeline
 
 - **Trưởng nhóm** (Bảng công việc của nhóm → *AI lập kế hoạch*): AI đọc đề bài, hạn nộp, thành viên và khối lượng đang mở, đề xuất giai đoạn + công việc có hạn, người phụ trách, khối lượng, ưu tiên. Sửa / bỏ chọn từng dòng rồi mới tạo task (qua API tạo công việc thông thường, không vượt hạn đề bài, không lặp task đã có).
-- **Mọi người** (Timeline → *AI sắp lịch*): xếp lịch cá nhân 4 tuần từ task được giao, bài chờ mình duyệt và phiếu đánh giá chéo đang mở, tránh trùng lịch đã có; lưu thành mục lịch ở *Lịch tôi tạo*.
+- **Mọi người** (Timeline → *AI sắp lịch* → *Xác nhận*): lịch được thêm ngay cho khoảng ngày đang xem (từ hôm nay trở đi) từ task được giao, bài chờ mình duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần, không trùng mục đã có. Nút *↶ Hoàn tác* xóa đúng các mục vừa thêm; sau khi hoàn tác, nút *→* thêm lại lịch AI đó.
 - Nguồn: **Google Gemini gói miễn phí** nếu đặt `GEMINI_API_KEY` trong `.env` (tạo key tại https://aistudio.google.com/apikey; tùy chọn `GEMINI_MODEL`, mặc định `gemini-2.5-flash`). Không có key, hết lượt miễn phí hoặc lỗi mạng thì tự dùng bộ sinh theo quy tắc nên demo luôn chạy. Đầu ra AI được kiểm tra (thành viên hợp lệ, ngày trong hạn, khối lượng 1/2/3/5) trước khi hiển thị.
 
 ## Source

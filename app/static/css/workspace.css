@@ -514,3 +514,5 @@ dialog.wide:has(.ai-table){width:min(1080px,calc(100vw - 32px))}
 @media (max-width:640px){.tl-filters select{width:100%}.group-grid{grid-template-columns:1fr}}
 .project-card .pc-course{margin-top:2px;font-size:12px;opacity:.85}
 #view[aria-busy="true"]{pointer-events:none}
+.ai-history{display:inline-flex;gap:6px}
+.ai-history .icon-only{min-width:40px;font-size:17px;line-height:1;padding-left:10px;padding-right:10px}
