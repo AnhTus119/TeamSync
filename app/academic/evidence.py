@@ -298,28 +298,14 @@ def queue_data():
 
 
 def peer_scores(p, uids):
-    """Published (closed-round) mean score per member of one project; reviewer identities never leave here."""
-    rounds = [r.id for r in PeerRound.query.filter_by(assignment_id=p.assignment_id)
-              if not (r.status == 'open' and now() <= r.closes_at)]
-    if not rounds or not uids:
-        return {}
-    acc = {}
-    for x in MatrixReview.query.filter(MatrixReview.project_id == p.id, MatrixReview.reviewee_id.in_(list(uids)),
-                                       MatrixReview.round_id.in_(rounds)):
-        acc.setdefault(x.reviewee_id, []).append(((x.attitude10 or x.attitude * 2) + (x.quality10 or x.quality * 2)) / 2)
-    return {uid: round(sum(v) / len(v), 2) for uid, v in acc.items()}
+    """Published per-task peer score per member of one project; reviewer identities never leave here."""
+    from .task_review import peer_scores as task_scores
+    return task_scores(p, uids)
 
 
 def peer_score(p, uid):
-    """Mean of valid reviews the user received in closed rounds of this project."""
-    rounds = [r.id for r in PeerRound.query.filter_by(assignment_id=p.assignment_id)
-              if not (r.status == 'open' and now() <= r.closes_at)]
-    if not rounds:
-        return None
-    rs = MatrixReview.query.filter(MatrixReview.project_id == p.id, MatrixReview.reviewee_id == uid,
-                                   MatrixReview.round_id.in_(rounds)).all()
-    vals = [((x.attitude10 or x.attitude * 2) + (x.quality10 or x.quality * 2)) / 2 for x in rs]
-    return round(sum(vals) / len(vals), 2) if vals else None
+    """Mean of published task reviews the user received in this project."""
+    return peer_scores(p, [uid]).get(uid)
 
 
 def dashboard_data():
@@ -379,7 +365,22 @@ def dashboard_data():
                                'task_title': t.title, 'project_name': p.name,
                                'link': submission_link(t.id, s.id) if s else f'/tasks/{t.id}',
                                'received_at': iso(s.received_at) if s else None})
+    if student_ps:
+        from .task_review import is_open, workers, reviewers
+        from ..models.workflow import TaskPeerReview
+        for t in task_rows:
+            if t.status != 'done' or t.project_id not in {p.id for p, *_ in student_ps} or not is_open(t):
+                continue
+            ws = workers(t)
+            if uid in ws or uid not in reviewers(t):
+                continue
+            if TaskPeerReview.query.filter_by(task_id=t.id, reviewer_id=uid).count() < len(ws):
+                alerts.append({'kind': 'peer_pending', 'label': 'Chờ bạn đánh giá chéo', 'task_id': t.id, 'task_title': t.title,
+                               'project_name': by_project[t.project_id].name, 'link': f'/projects/{t.project_id}?tab=peer#peer-task-{t.id}',
+                               'received_at': None})
     data['alerts'] = alerts
+    if any(role in STAFF for *_, role in ps):
+        data['review_rows'] = queue['to_review']
     contacts = {}
     for p, c, a, role in ps:
         if role in STAFF:

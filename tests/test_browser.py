@@ -35,18 +35,47 @@ def test_real_drag_drop_review_history_report(browser,app,tmp_path):
     path=tmp_path/'report.xlsx';download.value.save_as(path)
     from openpyxl import load_workbook
     wb=load_workbook(path);assert 'Đánh giá chéo' in wb.sheetnames and wb['Đóng góp'].max_row==5
-    leader.get_by_role('button',name='Lưu bản báo cáo hiện tại').click();expect(leader.get_by_role('link',name='PDF',exact=True)).to_have_count(2)
+    expect(leader.get_by_role('heading',name='Báo cáo đã lưu')).to_have_count(0);expect(leader.get_by_role('button',name='Lưu bản báo cáo hiện tại')).to_have_count(0)
     shots=tmp_path;leader.screenshot(path=str(shots/'tested-report.png'),full_page=True)
     leader.set_viewport_size({'width':390,'height':844});leader.goto(f'{url}/projects/{pid}');expect(leader.get_by_role('heading',name='Free2do')).to_be_visible();assert not leader.evaluate('document.documentElement.scrollWidth>innerWidth');leader.screenshot(path=str(shots/'tested-mobile.png'),full_page=True)
     assert not errors
 
 def test_browser_teacher_create_and_peer(browser,app):
-    d=demo(app);pid=d['pid'];sv1=name_of(app,MA)
-    teacher,url=login(browser,GV);teacher.goto(f'{url}/courses/{d["cid"]}');teacher.get_by_role('button',name='Mở đợt đánh giá chéo').click();teacher.get_by_role('dialog').get_by_role('button',name='Lưu',exact=True).click();expect(teacher.get_by_role('dialog')).to_have_count(0)
-    student,_=login(browser,TH);student.goto(f'{url}/projects/{pid}?tab=peer');student.get_by_role('button',name='Đánh giá thành viên',exact=True).click();fs=student.locator('fieldset').first;fs.get_by_role('checkbox').uncheck();fs.get_by_label('Hợp tác').select_option('8');fs.get_by_label('Chất lượng').select_option('6');student.get_by_role('dialog').get_by_role('button',name='Lưu',exact=True).click();expect(student.get_by_role('dialog')).to_have_count(0)
-    teacher.goto(f'{url}/projects/{pid}?tab=peer');teacher.get_by_role('button',name='Đóng đợt',exact=True).click();expect(teacher.get_by_role('cell',name=sv1,exact=True)).to_be_visible();student.reload();expect(student.get_by_role('cell',name=sv1,exact=True)).to_be_visible()
+    """Đánh giá chéo theo công việc: thành viên không làm task đánh giá người làm; giảng viên chỉ theo dõi."""
+    d=demo(app);pid=d['pid']
+    teacher,url=login(browser,GV);teacher.goto(f'{url}/courses/{d["cid"]}?tab=brief')
+    expect(teacher.get_by_role('button',name='Mở đợt đánh giá chéo')).to_have_count(0)
+    student,_=login(browser,TH);student.goto(f'{url}/home');student.locator('.alert-item[data-alert=peer_pending]').click();student.wait_for_url('**tab=peer**')
+    card=student.locator('.peer-task.needs',has_text='Chuẩn hóa mẫu phản hồi khách hàng');expect(card).to_be_visible()
+    card.get_by_role('button',name='Đánh giá người làm').click();dlg=student.get_by_role('dialog')
+    fs=dlg.locator('fieldset').first;fs.get_by_label('Hợp tác').select_option('8');fs.get_by_label('Chất lượng').select_option('6');fs.get_by_label('Nhận xét (tùy chọn)').fill('Đúng hạn')
+    dlg.locator('fieldset').nth(1).get_by_role('checkbox').check();dlg.get_by_role('button',name='Lưu',exact=True).click();expect(student.get_by_role('dialog')).to_have_count(0)
+    expect(student.locator('.peer-task.needs')).to_have_count(0);expect(student.get_by_role('button',name='Sửa đánh giá')).to_be_visible()
+    teacher.goto(f'{url}/projects/{pid}?tab=peer');expect(teacher.locator('.peer-task',has_text='Chuẩn hóa mẫu phản hồi khách hàng')).to_contain_text('Đã nhận 1 phiếu')
+    expect(teacher.get_by_role('button',name='Đánh giá người làm')).to_have_count(0)
     teacher.goto(url+'/home');teacher.get_by_role('button',name='Tạo lớp',exact=True).click();teacher.get_by_label('Mã lớp',exact=True).fill('TEST-01');teacher.get_by_label('Tên học phần').fill('Lớp kiểm thử');teacher.get_by_role('dialog').get_by_role('button',name='Lưu',exact=True).click();expect(teacher.get_by_role('heading',name='Lớp kiểm thử')).to_be_visible()
 
+
+def test_browser_teacher_three_menus_groups_and_no_reload(browser):
+    """Giảng viên: chỉ Tổng quan / Timeline / Học phần; mở lớp thấy ngay các nhóm; chuyển trang không tải lại."""
+    gv, url = login(browser, GV); errors = []; gv.on('pageerror', lambda e: errors.append(str(e)))
+    expect(gv.locator('#main-nav a')).to_have_text(['Tổng quan', 'Timeline', 'Học phần'])
+    expect(gv.locator('#project-nav')).to_be_hidden()
+    gv.evaluate('window.__same = 1')
+    gv.locator('#main-nav a', has_text='Học phần').click(); gv.locator('.course-row').first.click()
+    expect(gv.locator('.group-card')).to_have_count(5); assert '/courses/' in gv.url
+    expect(gv.get_by_role('link', name='Nhóm dự án · 5')).to_have_attribute('aria-current', 'page')
+    gv.locator('[data-search-input]').fill('free'); expect(gv.locator('.group-card:visible')).to_have_count(1)
+    gv.locator('.group-card:visible').click(); gv.wait_for_url('**/projects/*')
+    expect(gv.locator('#main-nav a.active')).to_have_text('Học phần')
+    gv.locator('#main-nav a', has_text='Timeline').click(); gv.locator('#tl-grid').wait_for()
+    expect(gv.locator('#tl-course')).to_be_visible(); expect(gv.locator('.tl-item.cat-task')).to_have_count(0)
+    for path in ('/submissions', '/kanban', '/projects'):
+        gv.goto(url + path); gv.wait_for_url('**/home')
+    gv.go_back(); gv.go_back()
+    gv.goto(url + '/home'); gv.evaluate('window.__same = 1'); gv.locator('#main-nav a', has_text='Học phần').click(); gv.locator('.course-row').first.wait_for()
+    assert gv.evaluate('window.__same') == 1  # same document: sidebar and page were not reloaded
+    assert not errors, errors
 
 def open_alert(page, title):
     """Click the alert for a task, expanding 'Xem thêm' first when the list is collapsed."""
@@ -67,6 +96,7 @@ def test_browser_demo_flow_criteria_referral_resubmit(browser):
     """Giảng viên thêm tiêu chí → nộp gắn tiêu chí → người trong lần nộp bị chặn → chuyển GV → GV yêu cầu sửa → nộp lại → duyệt."""
     gv, url = login(browser, GV_AI); errors = []; gv.on('pageerror', lambda e: errors.append(str(e)))
     gv.goto(url + '/courses'); gv.locator('.course-row', has_text='Trí tuệ nhân tạo').click()
+    gv.get_by_role('link', name='Đề bài & tiêu chí', exact=True).click()
     expect(gv.get_by_role('heading', name='Tiêu chí minh chứng')).to_be_visible()
     gv.get_by_role('button', name='Thêm tiêu chí').click(); gv.get_by_label('Tên tiêu chí').fill('Bảng ước tính tích hợp')
     gv.get_by_role('dialog').get_by_role('button', name='Lưu', exact=True).click()
@@ -91,8 +121,8 @@ def test_browser_demo_flow_criteria_referral_resubmit(browser):
     th.get_by_role('dialog').get_by_role('button', name='Lưu', exact=True).click()
     expect(th.locator('.referral')).to_contain_text('Nhờ giảng viên kiểm tra cách ước tính')
 
-    gv.goto(url + '/submissions'); gv.locator('#sub-list').wait_for()
-    gv.get_by_role('row', name='Cập nhật ước tính').get_by_role('link', name='Xem để duyệt').click()
+    gv.goto(url + '/home'); gv.locator('#review-list').wait_for()  # giảng viên: bài được chuyển nằm ở Tổng quan
+    gv.locator('#review-list').get_by_role('row', name='Cập nhật ước tính').get_by_role('link', name='Xem để duyệt').click()
     expect(gv.get_by_role('heading', name='Lần nộp 2')).to_be_visible()
     expect(gv.locator('.referral')).to_contain_text('Nhờ giảng viên kiểm tra')
     gv.get_by_role('button', name='Yêu cầu sửa', exact=True).click(); expect(gv.locator('#review-error')).to_contain_text('Bạn cần bổ sung')
@@ -154,7 +184,8 @@ def test_browser_dashboard_navigation_and_toggle(browser):
 def test_browser_import_course_tabs_and_mobile(browser, tmp_path):
     gv, url = login(browser, GV); errors = []; gv.on('pageerror', lambda e: errors.append(str(e)))
     gv.goto(url + '/courses'); gv.locator('.course-row', has_text='Phát triển ứng dụng Web').click()
-    for tab in ('Sinh viên', 'Nhóm', 'Đề bài & tiêu chí'):
+    expect(gv.get_by_role('link', name='Nhóm dự án · 5', exact=True)).to_have_attribute('aria-current', 'page')  # default tab
+    for tab in ('Sinh viên', 'Nhóm dự án · 5', 'Đề bài & tiêu chí'):
         gv.get_by_role('link', name=tab, exact=True).click(); expect(gv.get_by_role('link', name=tab, exact=True)).to_have_attribute('aria-current', 'page')
     gv.get_by_role('link', name='Sinh viên', exact=True).click()
     bad = tmp_path / 'ds.csv'; bad.write_text('student_code,full_name,email\nTSNEW051,An Bình,anbinh@example.org\nTSNEW052,Bảo Linh,email-khong-hop-le\n', encoding='utf-8')
@@ -166,9 +197,9 @@ def test_browser_import_course_tabs_and_mobile(browser, tmp_path):
     with gv.expect_file_chooser() as fc: gv.get_by_role('button', name='Chọn tệp khác').click()
     fc.value.set_files(str(bad)); expect(gv.locator('#import-status')).to_contain_text('tất cả hợp lệ')
     gv.get_by_role('button', name='Xác nhận nhập').click(); expect(gv.get_by_role('dialog')).to_have_count(0)
-    expect(gv.get_by_role('cell', name='Bảo Linh')).to_be_visible(); assert 'tab=students' in gv.url
+    expect(gv.get_by_role('cell', name='Bảo Linh', exact=True)).to_be_visible(); assert 'tab=students' in gv.url
     gv.set_viewport_size({'width': 390, 'height': 844})
-    for path in ('/home', '/kanban', '/submissions', '/courses', gv.url.replace(url, '')):
+    for path in ('/home', '/timeline', '/courses', gv.url.replace(url, '')):
         gv.goto(url + path); gv.wait_for_load_state('networkidle')
         assert not gv.evaluate('document.documentElement.scrollWidth>innerWidth'), path
     expect(gv.locator('#sidebar')).to_be_hidden(); gv.get_by_role('button', name='Bật/tắt thanh điều hướng').click(); expect(gv.locator('#sidebar')).to_be_visible()

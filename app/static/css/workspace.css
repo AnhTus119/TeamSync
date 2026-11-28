@@ -464,3 +464,53 @@ body.auth main{padding:16px}
 .members-actions{margin:18px 0 22px}
 .icon-text svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:640px){.project-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.project-tabs a{flex:0 0 auto;padding:8px 12px}}
+
+/* ---------- Chuyển trang trong ứng dụng: thanh tiến trình mảnh, sidebar giữ nguyên ---------- */
+body::before{content:"";position:fixed;top:0;left:0;height:3px;width:0;background:var(--sea);z-index:60;opacity:0;transition:width .4s ease,opacity .2s}
+body.routing::before{width:70%;opacity:1;transition:width 2.5s cubic-bezier(.1,.6,.3,1),opacity .1s}
+body.routing #view{opacity:.6;transition:opacity .15s .1s}
+#view{transition:opacity .12s}
+
+/* ---------- Học phần: các nhóm dự án ---------- */
+.group-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.group-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;text-decoration:none;display:flex;flex-direction:column;gap:10px;min-width:0;color:var(--midnight);transition:border-color .15s,box-shadow .15s}
+.group-card:hover{border-color:var(--harbor);box-shadow:0 6px 20px rgba(54,62,79,.08)}
+.group-card .gc-top{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:start}
+.group-card h3{margin:0;font-size:16.5px;line-height:1.25;font-weight:600;overflow-wrap:anywhere}
+.group-card .team{font-size:13px;color:var(--muted);margin-top:4px}
+.group-card .gc-people{display:flex;gap:8px;align-items:flex-start;margin:0;font-size:13px;color:#4a5262}
+.group-card .gc-ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;margin-top:2px}
+.group-card .pc-progress{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:auto}
+.group-card .pc-progress b{color:var(--ink);font-size:13px}
+.group-card .gc-flags{display:flex;flex-wrap:wrap;gap:6px;min-height:22px}
+.group-card.tier-p1{background:#F3F7FA}.group-card.tier-p25{background:#EFF6F5}.group-card.tier-p50{background:#EDF4EF}.group-card.tier-p100{background:#E4F0E5}
+
+/* ---------- Đánh giá chéo theo công việc ---------- */
+.peer-task.needs{border-color:var(--sea);box-shadow:inset 3px 0 0 var(--sea)}
+.peer-task h3{font-size:16px}
+.plain-link{text-decoration:none}.plain-link:hover{text-decoration:underline}
+.peer-result{border-top:1px solid var(--line);padding:8px 0}
+.peer-result .pr-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;font-size:14px}
+.peer-comments{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:#4a5262}
+.peer-comments li{margin:2px 0}
+
+/* ---------- AI hỗ trợ tạo timeline ---------- */
+.ai-btn{display:inline-flex;align-items:center;gap:6px}
+.ai-btn svg,[data-ai] svg,.ai-source svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;vertical-align:-3px}
+[data-ai="generate"]{display:inline-flex;align-items:center;gap:6px}
+.ai-source{color:var(--good);margin:12px 0 8px}
+.ai-table td{vertical-align:top}
+.ai-table input:not([type=checkbox]),.ai-table select,.ai-table textarea{width:100%;min-width:90px;font-size:13.5px}
+.ai-table textarea{min-height:52px;margin-top:4px}
+.ai-table td:nth-child(3){min-width:220px}
+.ai-table tr.saved{opacity:.55}
+.ai-table tr.failed td{background:var(--bad-bg)}
+dialog.wide:has(.ai-table){width:min(1080px,calc(100vw - 32px))}
+
+/* ---------- Timeline: bộ lọc giảng viên, mốc đề bài ---------- */
+.tl-filters{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 10px}
+.tl-filters select{width:auto;min-width:220px;max-width:100%}
+.tl-item.milestone{border-style:dashed}
+@media (max-width:640px){.tl-filters select{width:100%}.group-grid{grid-template-columns:1fr}}
+.project-card .pc-course{margin-top:2px;font-size:12px;opacity:.85}
+#view[aria-busy="true"]{pointer-events:none}

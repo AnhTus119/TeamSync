@@ -13,11 +13,21 @@ def clean(v):
     s=str(v if v is not None else '')
     return "'"+s if s.startswith(('=','+','-','@','\t','\r')) else s
 
+def peer_rows(d):
+    rows=[]
+    for x in d.get('peer',[]):
+        if 'items' in x:  # report saved before per-task reviews (evaluation rounds)
+            rows+=[[f"{i['user']['full_name']} ({x['title']})",'',i['count'],i['attitude'],i['quality'],i['average']] for i in x['items']]
+        else:
+            rows.append([x['user']['full_name'],x.get('tasks',''),x['count'],x['attitude'],x['quality'],x['average']])
+    return rows
+
 def tables(d):
     return [
       ('Đóng góp',['Thành viên','Khối lượng đã duyệt','Tỷ trọng %'],[[m['user']['full_name'],float(m['accepted_workload']),float(m['percent'])] for m in d['members']]),
       ('Công việc',['Công việc','Trạng thái','Khối lượng','Hạn','Phân bổ'],[[t['title'],LABEL.get(t['status'],t['status']),t['points'],t['due_at'],'; '.join(x['user']['full_name']+': '+x['percent']+'%' for x in t['shares'])] for t in d['tasks']]),
-      ('Đánh giá chéo',['Đợt','Thành viên','Số phiếu','Hợp tác /10','Chất lượng /10','Trung bình /10'],[[r['title'],x['user']['full_name'],x['count'],x['attitude'],x['quality'],x['average']] for r in d['peer'] for x in r['items']]),
+      ('Đánh giá chéo',['Thành viên','Số công việc','Số phiếu','Hợp tác /10','Chất lượng /10','Trung bình /10'],peer_rows(d)),
+      ('Đánh giá theo công việc',['Công việc','Người làm','Số phiếu','Hợp tác /10','Chất lượng /10','Trung bình /10','Nhận xét (ẩn danh)'],[[x['task_title'],x['user']['full_name'],x['count'],x['attitude'],x['quality'],x['average'],' | '.join(x.get('comments',[]))] for x in d.get('peer_tasks',[])]),
       ('Nhân sự',['Thành viên','Lý do','Trạng thái','Đồng ý','Ngưỡng','Người kế nhiệm'],[[x['user']['full_name'],x['reason'],LABEL.get(x['status'],x['status']),x['yes'],x['threshold'],(x['successor'] or {}).get('full_name','')] for x in d['departures']]),
       ('Điều chỉnh',['Công việc','Người quyết định','Lý do','Tỷ lệ mới'],[[next((t['title'] for t in d['tasks'] if t['id']==x['task_id']),str(x['task_id'])),x['decided_by_name'],x['reason'],'; '.join(next((m['user']['full_name'] for m in d['members'] if str(m['user']['id'])==uid),uid)+': '+str(v)+'%' for uid,v in x['shares'].items())] for x in d['allocation_history']]),
       ('Diễn biến',['Thời điểm','Sự kiện','Nội dung'],[[e['at'],{'task.created':'Tạo việc','task.started':'Bắt đầu','task.submitted':'Nộp bài','submission.accepted':'Duyệt hoàn thành','submission.returned':'Yêu cầu sửa'}.get(e['action'],e['action']),e['reason']] for e in d['timeline']]),

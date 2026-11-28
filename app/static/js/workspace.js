@@ -56,6 +56,7 @@ const NAV_ICONS = {
 };
 const CAL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>';
 const SEARCH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>';
+const AI_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.6 4.2 4.2 1.6-4.2 1.6L12 15.1l-1.6-4.2-4.2-1.6 4.2-1.6z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8zM6 15.5l.6 1.4 1.4.6-1.4.6L6 19.5l-.6-1.4-1.4-.6 1.4-.6z"/></svg>';
 const BOOK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M9 8h6M9 11h6M9 14h6"/></svg>';
 
 // ------------------------------------------------------------------ state
@@ -66,14 +67,26 @@ const isLeader = () => projectData?.my_role === 'leader';
 const roleLabel = () => me.role === 'admin' ? 'Quản trị hệ thống' : isTeacher() ? 'Giảng viên' : me.enrollments?.some(e => e.role === 'coordinator') ? 'Quản lý học phần' : 'Sinh viên';
 
 // ------------------------------------------------------------------ API
+// GET responses are kept for 5 minutes (or until F5). Any change made by this user (POST/PUT/PATCH/DELETE)
+// clears the cache, so every page shows the result of the user's own action immediately and stays consistent.
+const CACHE_TTL = 5 * 60 * 1000;
+const cache = new Map();
+const cacheable = path => !path.startsWith('/auth/') && !path.includes('unread_only');
+function clearCache() { cache.clear(); }
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
+  if (method === 'GET' && cacheable(path)) {
+    const hit = cache.get(path);
+    if (hit && Date.now() - hit.at < CACHE_TTL) return structuredClone(hit.data);
+  }
   const headers = {'X-CSRF-Token': csrf || '', 'Idempotency-Key': crypto.randomUUID()};
   if (!(body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const res = await fetch('/api/v1' + path, {method, headers, body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body)});
   let data = {};
   try { data = await res.json(); } catch { /* non-JSON error page */ }
+  if (method !== 'GET') clearCache();
   if (res.status === 401 && me) { store.set('ts-expired', '1'); location.href = '/login?expired=1'; throw Error('Phiên đăng nhập đã hết hạn'); }
   if (!res.ok) { const e = Error(data.error?.message || 'Không xử lý được yêu cầu'); e.code = data.error?.code; e.status = res.status; throw e; }
+  if (method === 'GET' && cacheable(path)) cache.set(path, {at: Date.now(), data: structuredClone(data.data)});
   return data.data;
 }
 async function all(path) {
@@ -137,20 +150,33 @@ function chrome() {
   $('#menu-email').textContent = me.email;
   $('#menu-settings').innerHTML = ICONS.settings + '<span>Cài đặt</span>';
   $('#logout').innerHTML = ICONS.logout + '<span>Đăng xuất</span>';
-  const nav = me.role === 'admin' ? [['/home', 'Quản lý tài khoản', 'users']] :
+  // Giảng viên / quản lý học phần: chỉ Tổng quan, Timeline, Học phần; nhóm mở từ Học phần.
+  const nav = me.role === 'admin' ? [['/home', 'Quản lý tài khoản', 'users']] : isStaff() ?
+    [['/home', 'Tổng quan', 'home'], ['/timeline', 'Timeline', 'calendar'], ['/courses', 'Học phần', 'book']] :
     [['/home', 'Tổng quan', 'home'], ['/projects', 'Dự án của tôi', 'folder'], ['/kanban', 'Bảng Kanban', 'kanban'], ['/timeline', 'Timeline', 'calendar'], ['/submissions', 'Bài nộp', 'inbox'], ['/courses', 'Học phần', 'book']];
-  $('#main-nav').innerHTML = nav.map(([href, text, icon]) => `<a href="${href}"><span class="nav-icon">${NAV_ICONS[icon]}</span><span>${h(text)}</span></a>`).join('');
+  const navKey = nav.map(x => x[0]).join();
+  if ($('#main-nav').dataset.key !== navKey) {
+    $('#main-nav').innerHTML = nav.map(([href, text, icon]) => `<a href="${href}"><span class="nav-icon">${NAV_ICONS[icon]}</span><span>${h(text)}</span></a>`).join('');
+    $('#main-nav').dataset.key = navKey;
+  }
   const path = location.pathname;
+  const staffGroup = isStaff() && /^\/(projects|tasks)\//.test(path);
   $$('#main-nav a').forEach(a => {
     const p = a.getAttribute('href');
-    const on = path === p || (p === '/courses' && path.startsWith('/courses/')) || (p === '/home' && path === '/');
-    a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page');
+    const on = path === p || (p === '/courses' && (path.startsWith('/courses/') || staffGroup)) || (p === '/home' && path === '/');
+    a.classList.toggle('active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  const ps = homeData?.projects || [];
-  $('#project-nav').innerHTML = ps.map(p => `<a href="/projects/${p.id}" data-pid="${p.id}">${robot()}<span>${h(p.name)}${p.team_name ? ' · ' + h(p.team_name) : isStaff() ? ' · ' + h(p.assignment_title) : ''}</span></a>`).join('');
+  const ps = isStaff() ? [] : homeData?.projects || [];
+  const projKey = ps.map(p => p.id + ':' + p.name + ':' + p.team_name).join('|');
+  if ($('#project-nav').dataset.key !== projKey) {
+    $('#project-nav').innerHTML = ps.map(p => `<a href="/projects/${p.id}" data-pid="${p.id}">${robot()}<span>${h(p.name)}${p.team_name ? ' · ' + h(p.team_name) : ''}</span></a>`).join('');
+    $('#project-nav').dataset.key = projKey;
+  }
   const pid = projectData?.id;
   $$('#project-nav a').forEach(a => a.classList.toggle('active', Number(a.dataset.pid) === pid && /^\/(projects|tasks)\//.test(path)));
   document.querySelector('.nav-divider').hidden = !ps.length;
+  $('#project-nav').hidden = !ps.length;
 }
 function setupChrome() {
   const mobile = () => matchMedia('(max-width:900px)').matches;
@@ -187,8 +213,8 @@ const progressRatio = p => p.total ? p.done / p.total : 0;
 const progressTier = p => p.total > 0 && p.done === p.total ? 'p100' : progressRatio(p) >= .5 ? 'p50' : progressRatio(p) >= .25 ? 'p25' : progressRatio(p) > 0 ? 'p1' : 'p0';
 function projectCard(p, index = 0) {
   const pct = p.total ? Math.round(p.done / p.total * 100) : 0;
-  return `<a class="project-card tier-${progressTier(p)}" href="/projects/${p.id}" data-search="${h((p.name + ' ' + p.team_name + ' ' + p.course_title).toLowerCase())}" data-lead="${p.my_role === 'leader'}" data-progress="${progressRatio(p)}" data-created="${h(p.created_at || '')}" data-index="${index}">
-    <div class="pc-top">${robot(true)}<div><h3>${h(p.name)}</h3><div class="team">${h(p.team_name || p.course_title)}</div></div><span aria-hidden="true">→</span></div>
+  return `<a class="project-card tier-${progressTier(p)}" href="/projects/${p.id}" data-search="${h((p.name + ' ' + p.team_name + ' ' + p.course_title + ' ' + p.assignment_title).toLowerCase())}" data-lead="${p.my_role === 'leader'}" data-progress="${progressRatio(p)}" data-created="${h(p.created_at || '')}" data-index="${index}">
+    <div class="pc-top">${robot(true)}<div><h3>${h(p.name)}</h3><div class="team">${h(p.team_name || p.assignment_title)}</div><div class="team pc-course" title="${h(p.course_title + ' · Đề bài: ' + p.assignment_title)}">${h(p.course_title)}</div></div><span aria-hidden="true">→</span></div>
     <div class="pc-mid"><span>${h(labels[p.my_role] || p.my_role)}</span>${badge(p.status)}</div>
     <div><div class="pc-progress"><span>${p.done}/${p.total} công việc hoàn thành</span><b>${pct === 100 && p.done !== p.total ? 99 : pct}%</b></div><div class="progress" role="img" aria-label="Tiến độ ${pct}%"><span style="width:${pct}%"></span></div></div></a>`;
 }
@@ -328,8 +354,11 @@ dashboardPage.bind = () => {
 function teacherHome(d) {
   const help = d.projects.reduce((n, p) => n + p.help, 0);
   const courses = d.courses.filter(c => ['instructor', 'coordinator'].includes(c.my_role));
-  return pageHead('Tổng quan giảng viên', 'Theo dõi học phần phụ trách, nhóm chờ duyệt và yêu cầu hỗ trợ', `<a class="button review-btn" href="/submissions?tab=review" id="review-link">Bài được chuyển cho tôi · ${d.review_queue}</a>${isTeacher() ? button('Tạo lớp', 'create-course') : ''}`) +
-    `<div class="stats"><a class="stat" href="/courses"><span>Học phần phụ trách</span><strong>${courses.length}</strong></a><a class="stat" href="#pending-groups"><span>Nhóm chờ duyệt</span><strong>${d.pending_groups.length}</strong></a><a class="stat" href="#help-list"><span>Yêu cầu hỗ trợ</span><strong>${help}</strong></a><a class="stat" href="/submissions?tab=review"><span>Bài được chuyển</span><strong>${d.review_queue}</strong></a></div>` +
+  const rows = d.review_rows || [];
+  const reviewPanel = panel(`Bài được chuyển cho tôi · ${rows.length}`, rows.length ? submissionTable(rows) : empty('Không có bài nào được chuyển cho bạn duyệt.'), 'id="review-list"');
+  return pageHead('Tổng quan giảng viên', 'Theo dõi học phần phụ trách, nhóm chờ duyệt, bài được chuyển và yêu cầu hỗ trợ', `<a class="button review-btn" href="#review-list" id="review-link">Bài được chuyển cho tôi · ${d.review_queue}</a>${isTeacher() ? button('Tạo lớp', 'create-course') : ''}`) +
+    `<div class="stats"><a class="stat" href="/courses"><span>Học phần phụ trách</span><strong>${courses.length}</strong></a><a class="stat" href="#pending-groups"><span>Nhóm chờ duyệt</span><strong>${d.pending_groups.length}</strong></a><a class="stat" href="#help-list"><span>Yêu cầu hỗ trợ</span><strong>${help}</strong></a><a class="stat" href="#review-list"><span>Bài được chuyển</span><strong>${d.review_queue}</strong></a></div>` +
+    reviewPanel +
     `<div class="grid2">${panel('Nhóm chờ duyệt', d.pending_groups.map(g => `<div class="history-row"><div><strong>${h(g.name)}</strong><p class="small muted" style="margin:0">${h(g.course_title)}</p></div>${link('Xem nhóm', '/projects/' + g.id)}</div>`).join('') || empty('Không có nhóm chờ duyệt.'), 'id="pending-groups"')}
     ${panel('Yêu cầu hỗ trợ', d.projects.filter(p => p.help).map(p => `<div class="history-row"><div><strong>${h(p.name)}</strong><p class="small muted" style="margin:0">${h(p.course_title)} · ${p.help} yêu cầu</p></div>${link('Hỗ trợ', '/projects/' + p.id + '?tab=help')}</div>`).join('') || empty('Không có yêu cầu hỗ trợ đang mở.'), 'id="help-list"')}</div>` +
     panel('Học phần phụ trách', courses.map(courseRow).join('') || empty('Chưa có học phần.')) + dashboardColumns(d, false);
@@ -378,7 +407,7 @@ function createProjectModal() {
   if (!open.length) return modal('Tạo dự án', empty('Hiện không có học phần nào đang mở cho bạn tự lập nhóm. Bạn đã có nhóm ở các học phần tự lập, hoặc người phụ trách sẽ xếp nhóm.'), null);
   return modal('Tạo dự án', select('assignment', 'Học phần (đề bài nhóm)', open.map(c => [c.assignment.id, `${c.title} · ${c.assignment.title}`])) + field('name', 'Tên nhóm dự án', 'text', '', true, 'maxlength="200"') +
     '<p class="small muted">Nhóm được tạo ở trạng thái nháp, bạn là trưởng nhóm. Mời thành viên rồi gửi giảng viên duyệt.</p>',
-    async f => { const p = await api(`/assignments/${f.get('assignment')}/projects`, {name: f.get('name')}); location.href = '/projects/' + p.id + '?tab=members'; return 'Đã tạo dự án'; }, 'Tạo dự án');
+    async f => { const p = await api(`/assignments/${f.get('assignment')}/projects`, {name: f.get('name')}); history.pushState({}, '', '/projects/' + p.id + '?tab=members'); return 'Đã tạo dự án'; }, 'Tạo dự án');
 }
 
 // ------------------------------------------------------------------ Kanban cá nhân
@@ -432,7 +461,7 @@ function projectTabs(p, current) {
 function projectHead(p) {
   const active = p.members.filter(m => m.status === 'active').length, pct = p.progress.total ? Math.round(p.progress.done / p.progress.total * 100) : 0;
   const shown = pct === 100 && p.progress.done !== p.progress.total ? 99 : pct;
-  return `<a class="crumb ph-crumb" href="/projects">← Dự án của tôi</a>
+  return `${isStaff() ? `<a class="crumb ph-crumb" href="/courses/${p.course_id}?tab=groups">← Các nhóm của học phần</a>` : '<a class="crumb ph-crumb" href="/projects">← Dự án của tôi</a>'}
     <section class="project-head ph-row" aria-label="Thông tin dự án">
       <span class="ph-icon">${HEAD_ICONS.project}</span>
       <div class="ph-name"><h1 class="page-title">${h(p.name)}</h1><div class="team">${h(p.team_name || p.assignment.title)} · ${h(labels[p.my_role] || p.my_role)}</div></div>
@@ -453,7 +482,7 @@ async function groupPage(id) {
   groupTasks = await all('/projects/' + id + '/tasks');
   let top = projectHead(p) + projectTabs(p, groupTab);
   if (p.status !== 'active') top += panel(labels[p.status] || p.status, `<p>${p.members.filter(m => m.status === 'active').length}/${p.assignment.group_min} thành viên tối thiểu · tối đa ${p.assignment.group_max}</p><div class="actions">${isLeader() && p.status === 'draft' ? button('Gửi giảng viên duyệt', 'submit-group') : ''}${isTeacher() && p.status === 'pending' ? button('Duyệt nhóm', 'approve-group') + button('Yêu cầu bổ sung', 'return-group', 'secondary') : ''}</div>`);
-  if (groupTab === 'board') return top + kanbanControls({...readFilters(), actions: !isStaff() && p.status === 'active' ? button('Tạo công việc', 'new-task') : ''}) + '<div id="board"></div>';
+  if (groupTab === 'board') return top + kanbanControls({...readFilters(), actions: !isStaff() && p.status === 'active' ? `<div class="actions">${isLeader() ? `<button type="button" data-action="ai-plan" class="secondary ai-btn">${AI_ICON}<span>AI lập kế hoạch</span></button>` : ''}${button('Tạo công việc', 'new-task')}</div>` : ''}) + '<div id="board"></div>';
   if (groupTab === 'members') return top + await membersTab(p);
   if (groupTab === 'submissions') return top + await projectSubmissionsTab(p);
   if (groupTab === 'minutes') return top + await minutesTab(p);
@@ -519,26 +548,57 @@ async function minutesTab(p) {
   return `<div class="toolbar"><h2 class="section-title" style="margin:0">Biên bản họp</h2>${button('Thêm biên bản', 'new-minutes')}</div>` +
     (ms.map(m => panel(m.title, `<small class="muted">${dt(m.created_at)}</small><p class="preserve">${h(m.notes)}</p>${p.status === 'active' ? button('Tạo việc từ kết luận', 'minute-task:' + m.id, 'secondary') : ''}`)).join('') || empty('Chưa có biên bản họp.'));
 }
-const peerTable = r => table(['Thành viên', 'Số phiếu', 'Hợp tác /10', 'Chất lượng /10', 'Trung bình /10'], r.items.map(x => [h(x.user.full_name), x.count, num(x.attitude, 2), num(x.quality, 2), `<strong>${num(x.average, 2)}</strong>`]));
+// ------------------------------------------------------------------ Đánh giá chéo theo công việc
+const score1 = v => v === null || v === undefined ? '—' : num(v, 2);
+const peerMemberTable = rows => table(['Thành viên', 'Số công việc', 'Số phiếu', 'Hợp tác /10', 'Chất lượng /10', 'Trung bình /10'],
+  rows.map(x => [h(x.user.full_name), x.tasks, x.count, score1(x.attitude), score1(x.quality), `<strong>${score1(x.average)}</strong>`]));
+const peerTaskTable = rows => table(['Công việc', 'Người làm', 'Số phiếu', 'Hợp tác /10', 'Chất lượng /10', 'Trung bình /10'],
+  rows.map(x => [h(x.task_title), h(x.user.full_name), x.count, score1(x.attitude), score1(x.quality), `<strong>${score1(x.average)}</strong>`]));
+function peerTaskCard(t) {
+  const who = t.workers.map(u => h(u.full_name)).join(', ') || '—';
+  const state = t.open ? `<span class="badge">Đang mở · đến ${dt(t.closes_at)}</span>` : badge('Đã công bố', 'good');
+  let body = '';
+  if (t.open) {
+    body = t.can_review
+      ? `<p class="small muted">Bạn đã trả lời ${t.reviewed}/${t.expected} người làm (gồm cả bỏ qua). Có thể sửa tới khi đóng.</p><div class="actions">${button(t.reviewed ? 'Sửa đánh giá' : 'Đánh giá người làm', 'peer-task:' + t.id, t.reviewed ? 'secondary' : '')}</div>`
+      : `<p class="small muted">${t.i_worked ? 'Bạn là người làm công việc này nên không tự đánh giá.' : isStaff() ? 'Thành viên nhóm đang đánh giá.' : 'Bạn không thuộc nhóm người được đánh giá công việc này.'} Đã nhận ${t.received} phiếu; kết quả công bố sau khi đóng.</p>`;
+  } else {
+    body = (t.results || []).map(r => `<div class="peer-result"><div class="pr-head"><strong>${h(r.user.full_name)}</strong><span>${r.count ? `${r.count} phiếu · Hợp tác ${score1(r.attitude)} · Chất lượng ${score1(r.quality)} · <b>Trung bình ${score1(r.average)}/10</b>` : '<span class="muted">Không có phiếu</span>'}</span></div>${r.comments.length ? `<ul class="peer-comments">${r.comments.map(c => `<li>${h(c)}</li>`).join('')}</ul>` : ''}</div>`).join('') || empty('Không có người làm.');
+  }
+  return `<article class="panel peer-task ${t.can_review && t.reviewed < t.expected ? 'needs' : ''}" id="peer-task-${t.id}"><div class="toolbar" style="margin-bottom:6px"><div><h3 style="margin:0">${link(t.title, '/tasks/' + t.id, 'plain-link')}</h3><small class="muted">Người làm: ${who} · Hoàn thành ${dt(t.completed_at)}</small></div>${state}</div>${body}</article>`;
+}
 async function peerTab(p) {
   const d = await api(`/workflow/projects/${p.id}/peer`);
   window.peerData = d;
-  return panel('Đánh giá chéo', `<p>Hai tiêu chí Hợp tác và Chất lượng · thang 1–10. Phiếu bỏ qua không tính là 0. Kết quả tổng hợp chỉ mở sau khi đợt kết thúc và không hiển thị người đánh giá.</p>${d.round ? `<p>${h(d.round.title)} · kết thúc ${dt(d.round.closes_at)} ${badge(d.open ? 'open' : 'closed')}</p>` : ''}<div class="actions">${!isStaff() && d.open ? button('Đánh giá thành viên', 'peer-form') : ''}${isTeacher() ? button('Mở đợt đánh giá', 'open-round:' + p.assignment_id) + (d.open ? button('Đóng đợt', 'close-round:' + d.round.id, 'secondary') : '') : ''}</div>`) +
-    (d.results.map(r => panel(r.title, peerTable(r))).join('') || empty('Kết quả tổng hợp hiển thị sau khi đóng đợt.'));
+  const mine = d.tasks.filter(t => t.can_review), others = d.tasks.filter(t => !t.can_review);
+  return panel('Đánh giá chéo theo công việc', `<p>Khi một công việc được duyệt hoàn thành, các thành viên không làm công việc đó đánh giá người làm theo hai tiêu chí <b>Hợp tác</b> và <b>Chất lượng</b> (thang 1–10), kèm nhận xét nếu muốn. Phiếu mở trong <b>${d.review_days} ngày</b>, được sửa hoặc bỏ qua (không tính là 0). Kết quả chỉ công bố sau khi đóng và không hiển thị người đánh giá.</p>${d.pending ? `<p><span class="badge warn">${d.pending} công việc chờ bạn đánh giá</span></p>` : ''}`) +
+    (d.members.length ? panel('Tổng hợp theo thành viên (đã công bố)', peerMemberTable(d.members)) : '') +
+    (mine.length ? `<h2 class="section-title">Chờ bạn đánh giá</h2>${mine.map(peerTaskCard).join('')}` : '') +
+    (others.length ? `<h2 class="section-title">${mine.length ? 'Các công việc khác' : 'Công việc đã hoàn thành'}</h2>${others.map(peerTaskCard).join('')}` : '') +
+    (!d.tasks.length ? empty('Chưa có công việc hoàn thành để đánh giá.') : '');
+}
+function peerTaskForm(t) {
+  const range = Array.from({length: 10}, (_, i) => [i + 1, i + 1]);
+  const body = `<p class="small muted">${h(t.title)} · đóng lúc ${dt(t.closes_at)}. Người được đánh giá không thấy bạn là ai.</p>` + t.workers.map(u => {
+    const x = t.own.find(o => o.reviewee_id === u.id);
+    return `<fieldset><legend>${h(u.full_name)}</legend><label class="check"><input type="checkbox" name="skip_${u.id}" ${x?.skipped ? 'checked' : ''}>Chưa đủ cơ sở / bỏ qua</label><div class="grid2">${select('at_' + u.id, 'Hợp tác', range, x?.attitude || 8)}${select('qu_' + u.id, 'Chất lượng', range, x?.quality || 8)}</div><label>Nhận xét (tùy chọn)<textarea name="cm_${u.id}" maxlength="1000">${h(x?.comment || '')}</textarea></label></fieldset>`;
+  }).join('');
+  return modal('Đánh giá người làm', body, async f => {
+    await api(`/workflow/tasks/${t.id}/peer`, {items: t.workers.map(u => ({reviewee_id: u.id, skip: f.has('skip_' + u.id), attitude: Number(f.get('at_' + u.id)), quality: Number(f.get('qu_' + u.id)), comment: f.get('cm_' + u.id) || ''}))}, 'PUT');
+    return 'Đã lưu đánh giá chéo';
+  });
 }
 let reportData = null;
 async function reportTab(p) {
   const d = await api(`/workflow/projects/${p.id}/report`);
   reportData = d;
-  const snaps = (await api(`/workflow/projects/${p.id}/snapshots`)).items;
-  const ex = (fmt, sid) => `/api/v1/workflow/projects/${p.id}/export?format=${fmt}${sid ? '&snapshot=' + sid : ''}`;
+  const ex = fmt => `/api/v1/workflow/projects/${p.id}/export?format=${fmt}`;
   return `<div class="toolbar"><div><h2 class="section-title" style="font-size:28px;margin:0">Báo cáo &amp; sản phẩm</h2><p class="muted" style="margin:4px 0 0">Dữ liệu mới nhất của nhóm</p></div><div class="actions">${link('Excel', ex('xlsx'))}${link('PDF', ex('pdf'))}${link('Bản in', ex('html'), 'button secondary', 'target="_blank" rel="noopener"')}</div></div>` +
     panel('Minh chứng theo tiêu chí', `<p class="muted">Tổng hợp lần nộp mới nhất của mỗi công việc.</p>${d.evidence.length ? table(['Tiêu chí', 'Bản đã duyệt', 'Bản chờ duyệt', 'Bản cần sửa'], d.evidence.map(e => [h(e.title) + (e.is_active ? '' : ' ' + badge('Đã ẩn', 'neutral')), e.accepted, e.pending, e.returned])) : empty('Đề bài chưa có tiêu chí minh chứng.')}`) +
     `<div class="grid2">${panel('Trạng thái công việc', '<div class="chart"><canvas id="status-chart" aria-label="Biểu đồ trạng thái công việc" role="img"></canvas></div>')}${panel('Khối lượng ghi nhận', '<div class="chart"><canvas id="contribution-chart" aria-label="Biểu đồ khối lượng ghi nhận" role="img"></canvas></div>')}</div>` +
     panel('Đóng góp', table(['Thành viên', 'Khối lượng đã duyệt', 'Tỷ trọng %'], d.members.map(m => [h(m.user.full_name), num(m.accepted_workload, 2), num(m.percent, 2)])) + `<details><summary>Cách tính</summary><p>${h(d.formula)}</p></details>`) +
-    d.peer.map(r => panel('Đánh giá chéo · ' + r.title, peerTable(r))).join('') +
-    panel('Sản phẩm bàn giao', `${isLeader() ? button('Chọn bài đã duyệt để bàn giao', 'deliver') : ''}${d.deliveries.map(x => `<div class="history-row"><div><strong>${h(x.title)}</strong><p class="small muted" style="margin:0">${dt(x.created_at)}</p><div class="actions">${x.submission_ids.map(sid => { const t = d.tasks.find(t => t.submissions?.some(s => s.id === sid)); return t ? link(t.title, `/tasks/${t.id}?submission=${sid}#submission-${sid}`, 'attempt') : ''; }).join('')}</div></div></div>`).join('') || empty('Chưa bàn giao sản phẩm nhóm')}`) +
-    panel('Báo cáo đã lưu', `${isLeader() ? button('Lưu bản báo cáo hiện tại', 'snapshot', 'secondary') : ''}${snaps.map(x => `<div class="history-row"><span>${dt(x.created_at)}</span><div class="actions">${link('Excel', ex('xlsx', x.id))}${link('PDF', ex('pdf', x.id))}</div></div>`).join('') || '<p class="muted">Chưa có bản lưu.</p>'}`);
+    panel('Đánh giá chéo theo công việc (đã công bố)', d.peer.length ? peerMemberTable(d.peer) + `<details><summary>Chi tiết theo từng công việc</summary>${peerTaskTable(d.peer_tasks)}</details>` : empty('Chưa có kết quả đánh giá chéo được công bố.')) +
+    panel('Sản phẩm bàn giao', `${isLeader() ? button('Chọn bài đã duyệt để bàn giao', 'deliver') : ''}${d.deliveries.map(x => `<div class="history-row"><div><strong>${h(x.title)}</strong><p class="small muted" style="margin:0">${dt(x.created_at)}</p><div class="actions">${x.submission_ids.map(sid => { const t = d.tasks.find(t => t.submissions?.some(s => s.id === sid)); return t ? link(t.title, `/tasks/${t.id}?submission=${sid}#submission-${sid}`, 'attempt') : ''; }).join('')}</div></div></div>`).join('') || empty('Chưa bàn giao sản phẩm nhóm')}`);
 }
 function drawCharts() {
   if (!window.Chart || !reportData) return;
@@ -720,18 +780,25 @@ async function timelinePage() {
   tlData = await api(`/workflow/schedule?view=${tlView}${q.get('from') ? '&from=' + encodeURIComponent(q.get('from')) : ''}`);
   const d = tlData, days = dayDiff(d.from, d.to) + 1;
   const range = `${dm(parseDay(d.from))} – ${dm(parseDay(d.to))}/${parseDay(d.to).getFullYear()}`;
-  const cats = d.categories.filter(c => tlView === 'mine' || c.key !== 'task');
+  const cats = d.categories.filter(c => tlView === 'mine' ? !(d.is_staff && c.key === 'task') : c.key !== 'task');
+  // Giảng viên: lọc theo học phần / nhóm (lọc tại trình duyệt, giữ trong URL).
+  tlFilter = {course: Number(q.get('course')) || null, project: Number(q.get('project')) || null};
+  const filters = d.is_staff && tlView === 'mine' ? `<div class="tl-filters"><select id="tl-course" aria-label="Lọc theo học phần"><option value="">Tất cả học phần</option>${d.courses.map(c => `<option value="${c.id}" ${tlFilter.course === c.id ? 'selected' : ''}>${h(c.title)}</option>`).join('')}</select><select id="tl-project" aria-label="Lọc theo nhóm"><option value="">Tất cả nhóm</option>${d.projects.filter(p => !tlFilter.course || p.course_id === tlFilter.course).map(p => `<option value="${p.id}" ${tlFilter.project === p.id ? 'selected' : ''}>${h(p.name)}</option>`).join('')}</select></div>` : '';
   return `<div class="toolbar tl-toolbar"><nav class="segmented" aria-label="Loại lịch"><a href="/timeline?view=mine" class="seg-link" ${tlView === 'mine' ? 'aria-current="page"' : ''}>Lịch của tôi</a><a href="/timeline?view=created" class="seg-link" ${tlView === 'created' ? 'aria-current="page"' : ''}>Lịch tôi tạo</a></nav>
     <div class="toolbar-right"><div class="tl-nav" role="group" aria-label="Chuyển khoảng ngày">${button('‹ Trước', 'tl-shift:-7', 'secondary')}${button('Hôm nay', 'tl-today', 'secondary')}${button('Sau ›', 'tl-shift:7', 'secondary')}</div><strong class="tl-range">${range}</strong>
-    ${tlView === 'created' ? `<button type="button" data-action="tl-add" class="create-btn"><span aria-hidden="true">+</span> Thêm lịch</button>` : ''}</div></div>
+    <button type="button" data-action="ai-schedule" class="secondary ai-btn">${AI_ICON}<span>AI sắp lịch</span></button>
+    ${tlView === 'created' ? `<button type="button" data-action="tl-add" class="create-btn"><span aria-hidden="true">+</span> Thêm lịch</button>` : ''}</div></div>${filters}
     <ul class="tl-legend" aria-label="Chú giải loại lịch">${cats.map(c => `<li><i class="cat-${c.key}"></i>${h(c.label)}</li>`).join('')}</ul>
-    <p class="small muted tl-hint">${tlView === 'mine' ? 'Lịch tổng hợp việc được giao và lịch được chia sẻ, chỉ xem. Bấm một mục để mở chi tiết; sửa lịch của bạn ở tab Lịch tôi tạo.' : 'Kéo thả để đổi ngày (giữ độ dài), bấm để sửa nội dung và loại. Bấm đúp vào một ngày để thêm lịch. Bàn phím: chọn mục rồi Alt + ←/→ để dời một ngày.'}</p>
+    <p class="small muted tl-hint">${tlView === 'mine' && d.is_staff ? 'Mốc nộp của các lớp, lịch các nhóm chia sẻ và lịch bạn tạo, chỉ xem. Sửa lịch của bạn ở tab Lịch tôi tạo.' : tlView === 'mine' ? 'Lịch tổng hợp việc được giao, mốc nộp đề bài và lịch được chia sẻ, chỉ xem. Bấm một mục để mở chi tiết; sửa lịch của bạn ở tab Lịch tôi tạo.' : 'Kéo thả để đổi ngày (giữ độ dài), bấm để sửa nội dung và loại. Bấm đúp vào một ngày để thêm lịch. Bàn phím: chọn mục rồi Alt + ←/→ để dời một ngày.'}</p>
     <div class="tl-scroll"><div class="tl-grid ${tlView === 'created' ? 'editable' : ''}" id="tl-grid" style="--days:${days}">${timelineCells(d, days)}</div></div>`;
 }
+let tlFilter = {course: null, project: null};
+const tlVisible = x => (!tlFilter.course || x.course_id === tlFilter.course) && (!tlFilter.project || x.project_id === tlFilter.project || (x.kind === 'milestone' && !x.project_id && (!tlFilter.course || x.course_id === tlFilter.course) && tlData.projects.find(p => p.id === tlFilter.project)?.course_id === x.course_id));
 function timelineCells(d, days) {
   // Each entry spans its days; lanes are packed greedily so one day's work stacks top-down in the same column.
-  const entries = d.items.map(x => {
-    const start = x.kind === 'task' ? ymd(new Date(x.due_at)) : x.start, end = x.kind === 'task' ? start : x.end;
+  const entries = d.items.filter(tlVisible).map(x => {
+    const point = x.kind === 'task' || x.kind === 'milestone';
+    const start = point ? ymd(new Date(x.due_at)) : x.start, end = point ? start : x.end;
     return {x, start, end, s: Math.max(0, dayDiff(d.from, start)), e: Math.min(days - 1, dayDiff(d.from, end))};
   }).filter(r => r.e >= 0 && r.s <= days - 1).sort((a, b) => a.s - b.s || (b.e - b.s) - (a.e - a.s) || (a.x.kind === 'task') - (b.x.kind === 'task'));
   const lanes = [];
@@ -746,7 +813,9 @@ function timelineCells(d, days) {
   for (const r of entries) {
     const x = r.x, pos = `grid-column:${r.s + 1} / ${r.e + 2};grid-row:${r.lane + 2}`;
     const cut = (r.s > 0 || dayDiff(d.from, r.start) >= 0 ? '' : ' cut-start') + (dayDiff(d.from, r.end) > days - 1 ? ' cut-end' : '');
-    if (x.kind === 'task') {
+    if (x.kind === 'milestone') {
+      html += `<a class="tl-item cat-deadline milestone" href="${h(x.link)}" style="${pos}" title="${h(x.title)}"><b>${h(x.title)}</b><small>${h(hm(x.due_at))} · ${h(x.project_name)}</small></a>`;
+    } else if (x.kind === 'task') {
       html += `<a class="tl-item cat-task${x.overdue ? ' late' : ''}${x.status === 'done' ? ' done' : ''}" href="${h(x.link)}" style="${pos}" title="${h(x.title)}"><b>${h(x.title)}</b><small>${h(hm(x.due_at))} · ${h(x.project_name)}${x.overdue ? ' · Quá hạn' : x.status === 'done' ? ' · Hoàn thành' : ''}</small></a>`;
     } else {
       const meta = [x.project_name, tlView === 'mine' && x.owner_name !== me.full_name ? x.owner_name : ''].filter(Boolean).join(' · ');
@@ -757,6 +826,14 @@ function timelineCells(d, days) {
   return html;
 }
 timelinePage.bind = () => {
+  const setFilter = (k, v) => {
+    const u = new URL(location.href);
+    v ? u.searchParams.set(k, v) : u.searchParams.delete(k);
+    if (k === 'course') u.searchParams.delete('project');
+    history.replaceState(null, '', u); attempt(() => render());
+  };
+  if ($('#tl-course')) $('#tl-course').onchange = e => setFilter('course', e.target.value);
+  if ($('#tl-project')) $('#tl-project').onchange = e => setFilter('project', e.target.value);
   const grid = $('#tl-grid');
   if (!grid || tlView !== 'created') return;
   const days = dayDiff(tlData.from, tlData.to) + 1;
@@ -814,6 +891,85 @@ function scheduleView(x) {
   modal(x.title, `<p><span class="tl-dot cat-${h(x.category)}"></span> ${h(cat)} · ${h(span)}</p>${x.project_name ? `<p class="muted">Dự án: ${h(x.project_name)}</p>` : ''}<p class="muted">Người tạo: ${h(x.owner_name)}</p>${x.note ? `<p class="preserve">${h(x.note)}</p>` : ''}${x.owner_name === me.full_name ? `<p class="small muted">Sửa mục này ở tab <a href="/timeline?view=created">Lịch tôi tạo</a>.</p>` : ''}`, null);
 }
 
+
+// ------------------------------------------------------------------ AI hỗ trợ tạo timeline
+// Bước 1: nhập mong muốn → máy chủ trả đề xuất (Gemini nếu có key, không thì bộ sinh theo quy tắc).
+// Bước 2: người dùng sửa / bỏ chọn từng dòng → tạo task hoặc mục lịch qua API thông thường.
+const tzOffset = () => new Date().getTimezoneOffset();
+const sourceNote = r => `<p class="small ai-source">${r.source === 'gemini' ? `${AI_ICON} Đề xuất bởi Gemini` : `${AI_ICON} Đề xuất theo quy tắc (chia giai đoạn theo hạn và khối lượng)`}${r.notice ? ' · ' + h(r.notice) : ''}${!r.ai_enabled && r.source !== 'gemini' ? ' · Đặt GEMINI_API_KEY trong .env để dùng AI miễn phí.' : ''}</p>`;
+function aiDialog(title, intro, placeholder, generate, renderRows, commit) {
+  const d = modal(title, `<p class="small muted">${intro}</p><label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="${h(placeholder)}"></textarea></label>
+    <div class="form-end"><button type="button" data-ai="generate">${AI_ICON}<span>Tạo đề xuất</span></button></div><div id="ai-result" aria-live="polite"></div>`, null, '', {wide: true});
+  const out = d.querySelector('#ai-result'), err = d.querySelector('.error'), gen = d.querySelector('[data-ai="generate"]');
+  let result = null;
+  gen.onclick = () => busy(gen, async () => {
+    err.textContent = ''; out.innerHTML = '<p class="muted">Đang tạo đề xuất…</p>';
+    try {
+      result = await generate(d.querySelector('[name=note]').value.trim());
+      out.innerHTML = sourceNote(result) + (result.items.length ? renderRows(result) + `<div class="form-end"><button type="button" data-ai="commit">Lưu các dòng đã chọn</button></div>` : empty(result.notice || 'Không có đề xuất nào.'));
+      gen.lastElementChild.textContent = 'Tạo lại đề xuất';
+      const save = out.querySelector('[data-ai="commit"]');
+      if (save) save.onclick = () => busy(save, async () => {
+        err.textContent = '';
+        const rows = [...out.querySelectorAll('[data-ai-row]')].filter(r => r.querySelector('[data-f=use]').checked);
+        if (!rows.length) { err.textContent = 'Chọn ít nhất một dòng.'; return; }
+        let ok = 0; const fails = [];
+        for (const r of rows) {
+          try { await commit(r, result); ok++; r.querySelector('[data-f=use]').checked = false; r.classList.add('saved'); }
+          catch (x) { fails.push(`${r.querySelector('[data-f=title]').value}: ${friendly(x)}`); r.classList.add('failed'); }
+        }
+        if (fails.length) { err.textContent = `Đã lưu ${ok}, lỗi ${fails.length}: ` + fails.join('; '); await render(); return; }
+        d.close(); await render(); notify(`Đã lưu ${ok} mục từ đề xuất`);
+      });
+    } catch (x) { out.innerHTML = ''; err.textContent = friendly(x); }
+  });
+  return d;
+}
+const dateOnly = v => ymd(new Date(v));
+function aiPlanModal() {
+  const p = projectData;
+  const people = p.members.filter(m => m.status === 'active');
+  const last = dateOnly(p.assignment.due_at);
+  return aiDialog('AI lập kế hoạch nhóm', `AI đọc đề bài “${h(p.assignment.title)}”, hạn nộp ${dt(p.assignment.due_at)} và ${people.length} thành viên để đề xuất các giai đoạn, công việc, hạn và người phụ trách. Bạn sửa rồi mới tạo công việc.`,
+    'Ví dụ: ưu tiên làm giao diện trước, Bảo mạnh backend, tuần sau nhóm bận thi giữa kỳ…',
+    note => api(`/workflow/projects/${p.id}/ai-plan`, {note, tz_offset: tzOffset()}),
+    r => `<div class="table-wrap ai-table"><table><thead><tr><th scope="col"><span class="sr-only">Chọn</span></th><th scope="col">Giai đoạn</th><th scope="col">Công việc · đầu ra</th><th scope="col">Phụ trách</th><th scope="col">Hạn</th><th scope="col">KL</th><th scope="col">Ưu tiên</th></tr></thead><tbody>${r.items.map((x, i) => `<tr data-ai-row="${i}">
+      <td><input type="checkbox" data-f="use" checked aria-label="Chọn dòng ${i + 1}"></td><td><small>${h(x.phase)}</small></td>
+      <td><input data-f="title" value="${h(x.title)}" maxlength="200" aria-label="Tên công việc"><textarea data-f="description" aria-label="Đầu ra cần bàn giao">${h(x.description)}</textarea></td>
+      <td><select data-f="responsible" aria-label="Người phụ trách">${people.map(m => `<option value="${m.user_id}" ${m.user_id === x.responsible_id ? 'selected' : ''}>${h(m.user.full_name)}</option>`).join('')}</select></td>
+      <td><input type="date" data-f="due" value="${dateOnly(x.due_at)}" max="${last}" aria-label="Hạn"></td>
+      <td><select data-f="points" aria-label="Khối lượng">${[1, 2, 3, 5].map(v => `<option ${v === x.points ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+      <td><select data-f="priority" aria-label="Ưu tiên">${[['low', 'Thấp'], ['medium', 'Vừa'], ['high', 'Cao']].map(([k, t]) => `<option value="${k}" ${k === x.priority ? 'selected' : ''}>${t}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>`,
+    async row => {
+      const v = k => row.querySelector(`[data-f=${k}]`).value;
+      const day = v('due');
+      if (!v('title').trim() || !v('description').trim() || !day) throw Error('Cần tên, đầu ra và hạn');
+      let due = new Date(day + 'T23:00');
+      const max = new Date(p.assignment.due_at);
+      if (due > max) due = max;
+      await api(`/projects/${p.id}/tasks`, {title: v('title').trim(), description: v('description').trim(), due_at: due.toISOString(), points: Number(v('points')), priority: v('priority'),
+        participants: [{user_id: Number(v('responsible')), role: 'responsible'}]});
+    });
+}
+function aiScheduleModal() {
+  const cats = tlData.categories.filter(c => c.key !== 'task');
+  return aiDialog('AI sắp lịch làm việc', 'AI xếp lịch cá nhân 4 tuần tới từ các công việc được giao, bài chờ bạn duyệt và phiếu đánh giá chéo đang mở, tránh trùng lịch đã có. Kết quả lưu vào tab Lịch tôi tạo.',
+    'Ví dụ: tối thứ 3 và thứ 5 đi làm thêm, muốn ôn thi Cơ sở dữ liệu vào cuối tuần…',
+    note => api('/workflow/ai-schedule', {note, tz_offset: tzOffset()}),
+    r => `<div class="table-wrap ai-table"><table><thead><tr><th scope="col"><span class="sr-only">Chọn</span></th><th scope="col">Nội dung</th><th scope="col">Loại</th><th scope="col">Từ ngày</th><th scope="col">Đến ngày</th><th scope="col">Chia sẻ với dự án</th></tr></thead><tbody>${r.items.map((x, i) => `<tr data-ai-row="${i}">
+      <td><input type="checkbox" data-f="use" checked aria-label="Chọn dòng ${i + 1}"></td>
+      <td><input data-f="title" value="${h(x.title)}" maxlength="200" aria-label="Tiêu đề"><textarea data-f="note" aria-label="Ghi chú">${h(x.note)}</textarea></td>
+      <td><select data-f="category" aria-label="Loại">${cats.map(c => `<option value="${c.key}" ${c.key === x.category ? 'selected' : ''}>${h(c.label)}</option>`).join('')}</select></td>
+      <td><input type="date" data-f="start" value="${x.start}" aria-label="Từ ngày"></td><td><input type="date" data-f="end" value="${x.end}" aria-label="Đến ngày"></td>
+      <td><select data-f="project" aria-label="Chia sẻ"><option value="">Không chia sẻ</option>${tlData.projects.map(p => `<option value="${p.id}">${h(p.name)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>`,
+    async row => {
+      const v = k => row.querySelector(`[data-f=${k}]`).value;
+      if (!v('title').trim() || !v('start')) throw Error('Cần tiêu đề và ngày');
+      if ((v('end') || v('start')) < v('start')) throw Error('Ngày kết thúc phải từ ngày bắt đầu');
+      await api('/workflow/schedule', {title: v('title').trim(), category: v('category'), start: v('start'), end: v('end') || v('start'), note: v('note'), project_id: v('project') ? Number(v('project')) : null});
+    });
+}
+
 // ------------------------------------------------------------------ Bài nộp
 function submissionTable(rows, reviewTab = false) {
   return `<div class="table-wrap"><table><thead><tr><th scope="col">Công việc</th><th scope="col">Người nộp</th><th scope="col">Trạng thái</th><th scope="col"><span class="sr-only">Hành động</span></th></tr></thead><tbody>${rows.map(r => `<tr class="sub-row" data-search="${h((r.task_title + ' ' + r.project_name + ' ' + r.submitted_by_name).toLowerCase())}">
@@ -860,18 +1016,19 @@ async function coursePage(id) {
   if (!c) throw Error('Không tìm thấy học phần hoặc bạn không thuộc học phần này');
   currentCourse = c;
   const staff = ['instructor', 'coordinator'].includes(c.my_role), teacher = c.my_role === 'instructor';
-  courseTab = new URLSearchParams(location.search).get('tab') || 'brief';
-  if (!staff || !['brief', 'students', 'groups'].includes(courseTab)) courseTab = 'brief';
+  // Người phụ trách: mở lớp là thấy ngay các nhóm dự án; đề bài và sinh viên ở tab bên cạnh.
+  courseTab = new URLSearchParams(location.search).get('tab') || (staff ? 'groups' : 'brief');
+  if (!staff || !['brief', 'students', 'groups'].includes(courseTab)) courseTab = staff ? 'groups' : 'brief';
   const a = c.assignment;
-  let html = pageHead(c.title, c.code + ' · ' + c.term, link('Tất cả học phần', '/courses'));
-  if (staff) html += `<nav class="tabs" aria-label="Mục học phần">${[['brief', 'Đề bài & tiêu chí'], ['students', 'Sinh viên'], ['groups', 'Nhóm']].map(([k, t]) => `<a href="/courses/${id}?tab=${k}" ${courseTab === k ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
+  let html = pageHead(c.title, c.code + ' · ' + c.term + (a ? ' · ' + a.title : ''), link('Tất cả học phần', '/courses'));
+  if (staff) html += `<nav class="tabs" aria-label="Mục học phần">${[['groups', `Nhóm dự án · ${c.groups.length}`], ['brief', 'Đề bài & tiêu chí'], ['students', 'Sinh viên']].map(([k, t]) => `<a href="/courses/${id}?tab=${k}" ${courseTab === k ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
   if (courseTab === 'students') return html + await studentsTab(c);
   if (courseTab === 'groups') return html + groupsTab(c);
   if (!a) return html + panel('Đề bài nhóm', empty('Chưa có đề bài được công bố.') + (teacher ? `<div class="actions" style="margin-top:12px">${button('Tạo đề bài', 'create-assignment:' + id)}</div>` : ''));
   const files = (await api('/assignments/' + a.id + '/files')).items;
   const cr = await api(`/workflow/assignments/${a.id}/evidence-criteria`);
   criteriaData = cr.items;
-  html += panel(a.title, `<p class="preserve">${h(a.brief)}</p><p>Hạn nộp: ${dt(a.due_at)} · Nhóm ${a.group_min}–${a.group_max} người · ${a.group_mode === 'self' ? 'Sinh viên tự lập nhóm' : 'Xếp nhóm'}</p><div class="actions">${files.map(f => link(f.name || f.original_filename, f.download_url)).join('')}${teacher ? button('Tải đề bài / tiêu chí', 'assignment-files:' + a.id, 'secondary') + button('Sửa đề bài', 'edit-assignment', 'secondary') + button('Mở đợt đánh giá chéo', 'open-round:' + a.id, 'secondary') : ''}</div>`);
+  html += panel(a.title, `<p class="preserve">${h(a.brief)}</p><p>Hạn nộp: ${dt(a.due_at)} · Nhóm ${a.group_min}–${a.group_max} người · ${a.group_mode === 'self' ? 'Sinh viên tự lập nhóm' : 'Xếp nhóm'}</p><div class="actions">${files.map(f => link(f.name || f.original_filename, f.download_url)).join('')}${teacher ? button('Tải đề bài / tiêu chí', 'assignment-files:' + a.id, 'secondary') + button('Sửa đề bài', 'edit-assignment', 'secondary') : ''}</div>`);
   html += `<section class="panel"><div class="toolbar"><h2 style="margin:0">Tiêu chí minh chứng</h2>${cr.can_manage ? button('Thêm tiêu chí', 'add-criterion:' + a.id) : ''}</div>${criteriaData.length ? table(['Tiêu chí', 'Trạng thái', ...(cr.can_manage ? ['Thao tác'] : [])], criteriaData.map(x => [`<strong>${h(x.title)}</strong>${x.description ? `<br><small class="muted">${h(x.description)}</small>` : ''}`, x.is_active ? badge('Đang dùng', 'good') : badge('Đã ẩn', 'neutral'), ...(cr.can_manage ? [button(x.is_active ? 'Ẩn tiêu chí' : 'Bật lại', 'toggle-criterion:' + x.id, 'secondary')] : [])])) : empty('Chưa có tiêu chí minh chứng.')}</section>`;
   if (!staff) {
     html += panel('Nhóm của bạn', c.groups.length ? c.groups.map(g => `<div class="history-row"><div><strong>${h(g.name)}</strong> ${badge(g.status)}</div>${link('Vào nhóm', '/projects/' + g.id, 'button')}</div>`).join('') : a.group_mode === 'self' ? `<p>Tạo nhóm nháp, mời thành viên; khi đủ người trưởng nhóm gửi giảng viên duyệt.</p>${button('Tạo nhóm', 'create-group:' + a.id)}` : empty('Người phụ trách học phần sẽ xếp nhóm cho bạn.'));
@@ -884,11 +1041,27 @@ async function studentsTab(c) {
   return `<section class="panel"><div class="toolbar"><h2 style="margin:0">Sinh viên trong lớp · ${st.length}</h2><div class="actions">${button('Nhập CSV / Excel', 'import:' + c.id, 'secondary')}${button('Thêm sinh viên', 'enroll:' + c.id)}</div></div>
     ${st.length ? table(['Họ tên', 'Mã sinh viên', 'Trạng thái'], st.map(e => [h(e.user.full_name), h(e.student_code || '—'), badge(e.status === 'active' ? 'active' : e.status)])) : empty('Chưa có sinh viên.')}</section>`;
 }
+// Các nhóm dự án của lớp: thẻ theo dõi tiến độ; nhóm cần chú ý (chờ duyệt, hỗ trợ, quá hạn) lên đầu.
+function groupCard(g) {
+  const pct = g.total ? Math.round(g.done / g.total * 100) : 0;
+  const shown = pct === 100 && g.done !== g.total ? 99 : pct;
+  const flags = [g.status === 'pending' ? badge('Chờ duyệt nhóm', 'warn') : g.status === 'draft' ? badge('draft') : '',
+    g.help ? badge(g.help + ' yêu cầu hỗ trợ', 'warn') : '', g.late ? badge(g.late + ' việc quá hạn', 'bad') : '',
+    g.pending_review ? badge(g.pending_review + ' việc chờ duyệt', 'neutral') : ''].join('');
+  const names = g.member_names || [];
+  return `<a class="group-card tier-${progressTier(g)}" href="/projects/${g.id}" data-search="${h((g.name + ' ' + (g.team_name || '') + ' ' + names.join(' ')).toLowerCase())}">
+    <div class="gc-top">${robot(true)}<div><h3>${h(g.name)}</h3><div class="team">${h(g.team_name || '—')}</div></div>${g.status === 'active' ? '' : badge(g.status)}</div>
+    <p class="gc-people"><span class="gc-ic">${NAV_ICONS.users}</span><span><b>${h(g.leader?.full_name || 'Chưa có trưởng nhóm')}</b>${names.length > 1 ? ' · ' + h(names.slice(1).join(', ')) : ''}</span></p>
+    <div class="pc-progress"><span>${g.done}/${g.total} công việc hoàn thành · ${g.members} thành viên</span><b>${shown}%</b></div>
+    <div class="progress" role="img" aria-label="Tiến độ ${shown}%"><span style="width:${shown}%"></span></div>
+    <div class="gc-flags">${flags || '<span class="muted small">Không có vấn đề cần chú ý</span>'}</div></a>`;
+}
 function groupsTab(c) {
   const rank = g => (g.status === 'pending' ? 0 : g.help ? 1 : g.late ? 2 : 3);
   const gs = [...c.groups].sort((a, b) => rank(a) - rank(b) || a.id - b.id);
-  return `<section class="panel"><div class="toolbar"><h2 style="margin:0">Nhóm · ${gs.length}</h2>${c.assignment ? button('Xếp nhóm', 'teacher-group:' + c.assignment.id) : ''}</div>
-    ${gs.length ? table(['Nhóm', 'Trạng thái', 'Tiến độ', 'Cần chú ý', ''], gs.map(g => [`<strong>${h(g.name)}</strong>`, badge(g.status), `${g.done}/${g.total} hoàn thành`, [g.status === 'pending' ? badge('Chờ duyệt', 'warn') : '', g.help ? badge(g.help + ' yêu cầu hỗ trợ', 'warn') : '', g.late ? badge(g.late + ' việc quá hạn', 'bad') : ''].join(' ') || '<span class="muted">—</span>', link('Mở nhóm', '/projects/' + g.id)])) : empty('Chưa có nhóm.')}</section>`;
+  const att = gs.filter(g => rank(g) < 3).length;
+  return `<div class="toolbar"><strong>${gs.length} nhóm${att ? ` · ${att} nhóm cần chú ý` : ''}</strong><div class="toolbar-right"><input type="search" class="search" data-search-input placeholder="Tìm nhóm, đội hoặc thành viên…" aria-label="Tìm nhóm">${c.assignment && c.my_role === 'instructor' || c.assignment && c.my_role === 'coordinator' ? button('Xếp nhóm', 'teacher-group:' + c.assignment.id) : ''}</div></div>
+    ${gs.length ? `<div class="group-grid">${gs.map(groupCard).join('')}</div>` : panel('', empty(c.assignment ? 'Chưa có nhóm nào trong lớp này.' : 'Lớp chưa có đề bài nhóm. Tạo đề bài ở tab Đề bài & tiêu chí.'))}`;
 }
 function importModal(cid) {
   const d = modal('Nhập danh sách sinh viên', `<p class="small muted">Tệp CSV UTF-8 hoặc Excel .xlsx có các cột <b>student_code, full_name, email</b>. Bước 1: xem trước. Bước 2: xác nhận khi tất cả dòng hợp lệ.</p>
@@ -935,33 +1108,82 @@ function accountPage() {
 }
 
 // ------------------------------------------------------------------ router
-async function render() {
-  charts.forEach(c => c.destroy()); charts = []; reportData = null;
-  const path = location.pathname;
+// Client-side navigation: the top bar and sidebar stay in place, only #view changes.
+const STAFF_HIDDEN = ['/projects', '/kanban', '/my-tasks', '/submissions'];
+let renderSeq = 0;
+function navigate(url, {replace = false} = {}) {
+  const u = new URL(url, location.href);
+  if (!replace) history.replaceState({...(history.state || {}), y: scrollY}, '');
+  history[replace ? 'replaceState' : 'pushState']({}, '', u.pathname + u.search + u.hash);
+  return render({scroll: 'top'});
+}
+function progress(on) {
+  clearTimeout(progress.timer);
+  // While a page is loading the old content cannot be clicked (avoids acting on stale data).
+  if (on) $('#view').setAttribute('aria-busy', 'true'); else $('#view').removeAttribute('aria-busy');
+  if (on) progress.timer = setTimeout(() => document.body.classList.add('routing'), 120);
+  else document.body.classList.remove('routing');
+}
+// Page loads run one at a time, in order. Each page keeps its data in module variables, so a slower,
+// older load must never finish after a newer one; loads superseded while waiting are skipped.
+let renderQueue = Promise.resolve();
+function render(opts = {}) {
+  const seq = ++renderSeq;
+  const run = renderQueue.then(() => (seq === renderSeq ? renderNow(opts) : undefined));
+  renderQueue = run.catch(() => {});
+  return run;
+}
+async function renderNow({scroll = 'keep', quiet = false} = {}) {
+  let path = location.pathname;
+  if (me.role !== 'admin' && isStaff() && STAFF_HIDDEN.includes(path)) { history.replaceState({}, '', '/home'); path = '/home'; scroll = 'top'; }
   let page, arg;
-  if (me.role === 'admin') page = adminPage;
-  else {
-    homeData = await api('/workflow/home');
-    if (path === '/projects') page = projectsPage;
-    else if (path === '/kanban' || path === '/my-tasks') page = kanbanPage;
-    else if (path === '/submissions') page = submissionsPage;
-    else if (path === '/timeline') page = timelinePage;
-    else if (path === '/courses') page = coursesPage;
-    else if (/^\/courses\/\d+/.test(path)) { page = coursePage; arg = Number(path.split('/')[2]); }
-    else if (/^\/projects\/\d+/.test(path)) { page = groupPage; arg = Number(path.split('/')[2]); }
-    else if (/^\/tasks\/\d+/.test(path)) { page = taskPage; arg = Number(path.split('/')[2]); }
-    else if (path === '/notifications') page = notificationsPage;
-    else if (path === '/account') page = accountPage;
-    else page = dashboardPage;
-  }
-  if (!['/projects', '/tasks'].some(p => path.startsWith(p + '/'))) projectData = null;
-  const html = await page(arg);
-  $('#view').innerHTML = html;
-  chrome();
-  page.bind?.();
-  bindSearch();
+  if (!quiet) progress(true);
+  try {
+    if (me.role === 'admin') page = adminPage;
+    else {
+      homeData = await api('/workflow/home');
+      if (path === '/projects') page = projectsPage;
+      else if (path === '/kanban' || path === '/my-tasks') page = kanbanPage;
+      else if (path === '/submissions') page = submissionsPage;
+      else if (path === '/timeline') page = timelinePage;
+      else if (path === '/courses') page = coursesPage;
+      else if (/^\/courses\/\d+/.test(path)) { page = coursePage; arg = Number(path.split('/')[2]); }
+      else if (/^\/projects\/\d+/.test(path)) { page = groupPage; arg = Number(path.split('/')[2]); }
+      else if (/^\/tasks\/\d+/.test(path)) { page = taskPage; arg = Number(path.split('/')[2]); }
+      else if (path === '/notifications') page = notificationsPage;
+      else if (path === '/account') page = accountPage;
+      else page = dashboardPage;
+    }
+    if (!['/projects', '/tasks'].some(p => path.startsWith(p + '/'))) projectData = null;
+    const html = await page(arg);
+    const y = scrollY;
+    charts.forEach(c => c.destroy()); charts = []; if (page !== groupPage) reportData = null;
+    $('#view').innerHTML = html;
+    chrome();
+    page.bind?.();
+    bindSearch();
+    const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target && page !== taskPage) target.scrollIntoView({block: 'start'});
+    else if (scroll === 'top') scrollTo(0, 0);
+    else if (typeof scroll === 'number') scrollTo(0, scroll);
+    else scrollTo(0, y);
+    lastRender = Date.now();
+  } finally { progress(false); }
   updateUnread();
 }
+let lastRender = Date.now();
+// Same-origin links open inside the app shell; downloads, API files and new tabs keep the browser default.
+document.addEventListener('click', e => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !me) return;
+  const a = e.target.closest('a[href]');
+  if (!a || a.target || a.hasAttribute('download') || a.closest('[data-action]')) return;
+  const u = new URL(a.href, location.href);
+  if (u.origin !== location.origin || u.pathname.startsWith('/api/') || u.pathname.startsWith('/static/') || u.pathname === '/login') return;
+  if (u.pathname === location.pathname && u.search === location.search && u.hash) return; // in-page anchor
+  e.preventDefault();
+  document.body.classList.remove('side-open'); $('#scrim').hidden = true;
+  attempt(() => navigate(u.href));
+});
 function bindSearch() {
   $$('[data-search-input]').forEach(i => i.oninput = () => { const q = i.value.trim().toLowerCase(); $$('[data-search]').forEach(el => { el.hidden = !el.dataset.search.includes(q); }); });
 }
@@ -992,6 +1214,8 @@ async function action(a, btn) {
   if (key === 'tl-shift') return timelineShift(id);
   if (key === 'tl-today') return timelineShift(0);
   if (key === 'tl-add') return scheduleForm(null, idText || '');
+  if (key === 'ai-schedule') return aiScheduleModal();
+  if (key === 'ai-plan') return aiPlanModal();
   if (key === 'tl-edit') return scheduleForm(tlData.items.find(x => x.kind === 'item' && x.id === id));
   if (key === 'tl-view') return scheduleView(tlData.items.find(x => x.kind === 'item' && x.id === id));
   if (key === 'tl-delete') { if (!confirm('Xóa mục lịch này?')) return; await api('/workflow/schedule/' + id, {}, 'DELETE'); document.querySelector('dialog[open]')?.close(); await render(); return notify('Đã xóa mục lịch'); }
@@ -1029,10 +1253,7 @@ async function action(a, btn) {
   if (key === 'explain') { const c = window.casesData.find(c => c.id === id); return modal('Giải trình', area('explanation', 'Nội dung giải trình', c.explanation || ''), f => api(`/complaints/${id}/explain`, {version: c.version, explanation: f.get('explanation')})); }
   if (key === 'resolve') { const c = window.casesData.find(c => c.id === id); return modal('Xử lý đề nghị', Object.entries(c.shares).map(([uid, v]) => field('share_' + uid, (c.participants.find(x => x.user.id === Number(uid))?.user.full_name || uid) + ' (%)', 'number', v)).join('') + area('reason', 'Kết luận và căn cứ') + (!c.explanation ? '<label class="check"><input type="checkbox" name="opportunity" required>Đã tạo cơ hội giải trình nhưng chưa nhận phản hồi</label>' : ''), f => { const shares = Object.fromEntries(Object.keys(c.shares).map(uid => [uid, f.get('share_' + uid)])); const total = Object.values(shares).reduce((s, v) => s + Number(v), 0); if (Math.abs(total - 100) > 0.001) throw Error('Tổng tỷ lệ phải đúng 100% (hiện ' + total + '%)'); return api(`/complaints/${id}/resolve`, {version: c.version, reason: f.get('reason'), explanation_not_provided: f.has('opportunity'), shares}); }); }
   if (key === 'escalate') { const c = window.casesData.find(c => c.id === id); return modal('Nhờ giảng viên hỗ trợ', area('reason', 'Lý do'), f => api(`/complaints/${id}/escalate`, {version: c.version, reason: f.get('reason')})); }
-  if (key === 'open-round') return modal('Mở đợt đánh giá chéo', field('title', 'Tên đợt', 'text', 'Đánh giá quá trình hợp tác') + field('closes_at', 'Kết thúc', 'datetime-local', toLocalInput(nowMs() + 7 * 86400000)), f => api(`/assignments/${id}/evaluation-rounds`, {title: f.get('title'), closes_at: iso(f.get('closes_at'))}));
-  if (key === 'close-round') { await busy(btn, () => api(`/evaluation-rounds/${id}/close`, {version: window.peerData.round.version})); return render(); }
-  if (key === 'peer-form') { const d = window.peerData; return modal('Đánh giá thành viên', d.members.map(m => { const x = d.own.find(x => x.reviewee_id === m.id); return `<fieldset><legend>${h(m.full_name)}</legend><label class="check"><input type="checkbox" name="skip_${m.id}" ${!x ? 'checked' : ''}>Chưa đủ cơ sở / bỏ qua</label>${select('at_' + m.id, 'Hợp tác', Array.from({length: 10}, (_, i) => [i + 1, i + 1]), x?.attitude || 5)}${select('qu_' + m.id, 'Chất lượng', Array.from({length: 10}, (_, i) => [i + 1, i + 1]), x?.quality || 5)}</fieldset>`; }).join(''), f => api(`/workflow/projects/${p.id}/peer`, {round_id: d.round.id, items: d.members.map(m => ({reviewee_id: m.id, skip: f.has('skip_' + m.id), attitude: Number(f.get('at_' + m.id)), quality: Number(f.get('qu_' + m.id))}))}, 'PUT')); }
-  if (key === 'snapshot') { await busy(btn, () => api(`/workflow/projects/${p.id}/snapshots`, {})); await render(); return notify('Đã lưu bản báo cáo tại thời điểm chốt'); }
+  if (key === 'peer-task') return peerTaskForm(window.peerData.tasks.find(x => x.id === id));
   if (key === 'deliver') { const ts = groupTasks.filter(t => t.status === 'done'); return modal('Bàn giao sản phẩm nhóm', field('title', 'Tên bản bàn giao', 'text', 'Sản phẩm nhóm') + (ts.map(t => `<label class="check"><input type="checkbox" name="submissions" value="${t.latest_submission_id}">${h(t.title)}</label>`).join('') || empty('Chưa có bài đã duyệt.')), f => api(`/workflow/projects/${p.id}/deliveries`, {title: f.get('title'), submission_ids: f.getAll('submissions').map(Number)})); }
   if (key === 'new-help') return modal('Yêu cầu hỗ trợ', field('subject', 'Tiêu đề') + select('task_id', 'Phạm vi', [['', 'Chọn phạm vi'], ['group', 'Vấn đề chung của dự án'], ...groupTasks.map(t => [t.id, t.title])]) + area('content', 'Khó khăn và đề nghị hỗ trợ'), f => { const scope = f.get('task_id'); if (!scope) throw Error('Cần chọn phạm vi hỗ trợ'); return api(`/projects/${p.id}/help-requests`, {subject: f.get('subject'), content: f.get('content'), scope: scope === 'group' ? 'group' : 'task', task_id: scope === 'group' ? null : Number(scope)}); });
   if (key === 'help-response') { const x = window.helpData.find(x => x.id === id); return modal('Phản hồi hỗ trợ', area('response', 'Nội dung', x.response || '') + '<label class="check"><input type="checkbox" name="resolve">Đã hỗ trợ xong</label>', f => api(`/help-requests/${id}/respond`, {version: x.version, response: f.get('response'), resolve: f.has('resolve')})); }
@@ -1070,10 +1291,19 @@ async function boot() {
   setupChrome();
   await render();
 }
-addEventListener('popstate', () => { if (me) attempt(render); });
+addEventListener('popstate', e => { if (me) attempt(() => render({scroll: e.state?.y ?? 'top'})); });
 boot().catch(e => { $('#view').innerHTML = panel('Không tải được nội dung', `<p>${h(e.message)}</p>${link('Về tổng quan', '/home')}`); });
 
 setInterval(() => {
   if (!me || document.hidden) return;
   updateUnread();
 }, 30000);
+// Every 5 minutes: drop cached data and quietly redraw the current page with fresh data,
+// unless the user is in the middle of something (open dialog, focused field, unsent form).
+setInterval(() => {
+  if (!me || document.hidden) return;
+  clearCache();
+  const busyUser = document.querySelector('dialog[open]') || document.activeElement?.matches?.('input,textarea,select') ||
+    [...document.querySelectorAll('#view textarea, #view input[type=text], #view input[type=file]')].some(x => x.value);
+  if (!busyUser && Date.now() - lastRender >= CACHE_TTL - 1000) attempt(() => render({quiet: true}));
+}, CACHE_TTL);
