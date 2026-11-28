@@ -263,6 +263,8 @@ def audit(action, obj, cid=None, pid=None, reason=None):
         created_at=now(),
     )
     db.session.add(ev)
+    from .notifications import from_audit
+    from_audit(action, obj, cid=cid, pid=pid, reason=reason)
 
 
 def notify(event, obj, recipients, path):

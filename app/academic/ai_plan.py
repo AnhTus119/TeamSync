@@ -11,6 +11,8 @@ bộ sinh theo quy tắc nên luôn có kết quả. Đầu ra AI được kiể
 """
 import json
 import logging
+import re
+import threading
 import time as time_module
 from datetime import date, datetime, time, timedelta, timezone
 import requests
@@ -67,7 +69,7 @@ def note_of(body):
     return v.strip()
 
 
-FALLBACK_MODELS = ('gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash')
+FALLBACK_MODELS = ('gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest')
 
 
 def google_error(r):
@@ -81,14 +83,48 @@ def google_error(r):
         return 'key', 'API key không hợp lệ hoặc chưa bật Gemini API cho key này. Tạo lại key tại aistudio.google.com/apikey (key thường bắt đầu bằng “AIza”).'
     if r.status_code == 400 and 'location' in msg.lower():
         return 'error', 'Gemini chưa hỗ trợ khu vực mạng hiện tại.'
-    return 'error', f'Gemini báo lỗi {r.status_code}' + (f': {msg}' if msg else '')
+    return 'error', f'lỗi {r.status_code}' + (f': {msg}' if msg else '')
 
 
 OVERLOADED = (500, 502, 503, 504)
+RANK = {'busy': 3, 'quota': 3, 'key': 4, 'error': 2, 'invalid': 1}
 
 
-def gemini(prompt, read_timeout=60, max_tokens=2048):
-    key = (current_app.config.get('GEMINI_API_KEY') or '').strip().strip('"').strip("'")
+def better(a, b):
+    """Keep the most useful reason when several models failed (overloaded beats 'model not found')."""
+    return b if RANK.get(b[0], 0) >= RANK.get(a[0], 0) else a
+
+
+def post_json(name, url, headers, body, read_timeout):
+    try:
+        return requests.post(url, headers=headers, json=body, timeout=(15, read_timeout))
+    except requests.ConnectTimeout as e:
+        log.warning('%s request failed: %s', name, type(e).__name__)
+        raise AIUnavailable('error', 'không mở được kết nối trong 15 giây (mạng / tường lửa / proxy)')
+    except requests.Timeout as e:
+        log.warning('%s request failed: %s', name, type(e).__name__)
+        raise AIUnavailable('error', f'phản hồi quá lâu (quá {read_timeout} giây)')
+    except requests.RequestException as e:
+        log.warning('%s request failed: %s', name, type(e).__name__)
+        raise AIUnavailable('error', f'không kết nối được ({type(e).__name__})')
+
+
+def parse_json_text(text):
+    """JSON from a model answer: drops <think>…</think> blocks and ``` fences, takes the outer {...}."""
+    text = re.sub(r'<think>.*?</think>', '', text or '', flags=re.S).strip()
+    text = text.removeprefix('```json').removeprefix('```').removesuffix('```').strip()
+    if not text.startswith('{'):
+        a, b = text.find('{'), text.rfind('}')
+        text = text[a:b + 1] if a >= 0 and b > a else text
+    return json.loads(text)
+
+
+def config_key(name):
+    return (current_app.config.get(name) or '').strip().strip('"').strip("'")
+
+
+def gemini_call(prompt, read_timeout=60, max_tokens=2048):
+    key = config_key('GEMINI_API_KEY')
     if not key:
         raise AIUnavailable('no-key')
     configured = (current_app.config.get('GEMINI_MODEL') or '').strip()
@@ -99,56 +135,166 @@ def gemini(prompt, read_timeout=60, max_tokens=2048):
         if '2.5' in model and 'pro' not in model:
             config['thinkingConfig'] = {'thinkingBudget': 0}  # no "thinking" step: answers in seconds instead of ~30 s
         body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}], 'generationConfig': config}
-        for attempt, wait in enumerate((0, 3)):  # overloaded (503): wait and retry once, then try the next model
+        for wait in (0, 3):  # overloaded (503): wait and retry once, then try the next model
             if wait:
                 time_module.sleep(wait)
-            try:
-                r = requests.post(GEMINI_URL.format(model=model), headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
-                                  json=body, timeout=(15, read_timeout))
-            except requests.ConnectTimeout as e:
-                log.warning('Gemini request failed: %s', type(e).__name__)
-                raise AIUnavailable('error', 'Không mở được kết nối tới Gemini trong 15 giây (mạng / tường lửa / proxy).')
-            except requests.Timeout as e:
-                log.warning('Gemini request failed: %s', type(e).__name__)
-                raise AIUnavailable('error', f'Gemini phản hồi quá lâu (quá {read_timeout} giây), thử lại sau.')
-            except requests.RequestException as e:
-                log.warning('Gemini request failed: %s', type(e).__name__)
-                raise AIUnavailable('error', f'Không kết nối được tới Gemini ({type(e).__name__}); kiểm tra mạng / tường lửa.')
+            r = post_json('Gemini', GEMINI_URL.format(model=model), {'x-goog-api-key': key, 'Content-Type': 'application/json'}, body, read_timeout)
             if r.status_code not in OVERLOADED:
                 break
-            last = ('busy', 'Gemini đang quá tải (lỗi 503 phía Google), đã thử lại nhưng chưa được. Thử lại sau ít phút.')
+            last = better(last, ('busy', 'đang quá tải (503 phía Google)'))
         else:
             continue  # still overloaded: next model
-        if r.status_code == 404:  # model name not available for this key: try the next one
-            last = ('error', f'Không tìm thấy model {model}.')
+        if r.status_code == 404:  # model not available for this key: try the next one
+            last = better(last, ('error', f'không có model {model}'))
             continue
         if r.status_code == 429:
-            raise AIUnavailable('quota')
+            last = better(last, ('quota', 'hết lượt miễn phí'))
+            continue
         if r.status_code >= 400:
             reason, detail = google_error(r)
             log.warning('Gemini %s: %s', r.status_code, detail)
             raise AIUnavailable(reason, detail)
         try:
-            text = r.json()['candidates'][0]['content']['parts'][0]['text']
-            return json.loads(text.strip().removeprefix('```json').removeprefix('```').removesuffix('```'))
+            return parse_json_text(r.json()['candidates'][0]['content']['parts'][0]['text'])
         except Exception:
-            raise AIUnavailable('invalid')
+            last = better(last, ('invalid', 'trả kết quả không đọc được'))
     raise AIUnavailable(*last)
 
 
-NOTICE = {'quota': 'Gemini đã hết lượt miễn phí, kế hoạch được tạo theo quy tắc.',
-          'error': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
-          'key': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
-          'busy': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
-          'invalid': 'Gemini trả kết quả không hợp lệ, kế hoạch được tạo theo quy tắc.'}
+# OpenAI-compatible providers. Model names change often, so the free / available models are read from the
+# provider's own list (cached 1 hour) unless a model is set in .env. Qwen is preferred when it is offered.
+PREFER = ('qwen', 'deepseek', 'llama-3.3', 'llama', 'gpt-oss', 'gemma', 'mistral', 'nemotron')
+SKIP = re.compile(r'whisper|tts|guard|embed|audio|lyria|vision-only|1\.7b|nano|distil|playai|orpheus', re.I)
+_model_cache = {}
+
+
+def ranked(ids):
+    def score(i):
+        low = i.lower()
+        return next((k for k, p in enumerate(PREFER) if p in low), len(PREFER))
+    return sorted((i for i in ids if not SKIP.search(i)), key=score)
+
+
+def openrouter_models(key):
+    hit = _model_cache.get('openrouter')
+    if hit and time_module.time() - hit[0] < 3600:
+        return hit[1]
+    try:
+        r = requests.get('https://openrouter.ai/api/v1/models', headers={'Authorization': f'Bearer {key}'}, timeout=15)
+        free = [m['id'] for m in r.json().get('data', [])
+                if str(m.get('pricing', {}).get('prompt')) == '0' and str(m.get('pricing', {}).get('completion')) == '0' and m['id'] != 'openrouter/free']
+    except Exception:
+        free = []
+    models = ranked(free)[:3] + ['openrouter/free']  # 'openrouter/free' = OpenRouter picks any free model
+    _model_cache['openrouter'] = (time_module.time(), models)
+    return models
+
+
+def groq_models(key):
+    hit = _model_cache.get('groq')
+    if hit and time_module.time() - hit[0] < 3600:
+        return hit[1]
+    try:
+        r = requests.get('https://api.groq.com/openai/v1/models', headers={'Authorization': f'Bearer {key}'}, timeout=15)
+        ids = [m['id'] for m in r.json().get('data', []) if m.get('active', True)]
+    except Exception:
+        ids = []
+    models = ranked(ids)[:3] or ['qwen/qwen3-32b', 'llama-3.3-70b-versatile']
+    _model_cache['groq'] = (time_module.time(), models)
+    return models
+
+
+def openai_call(name, base, key, models, prompt, read_timeout, max_tokens):
+    last = ('error', '')
+    headers = {'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
+    if name == 'OpenRouter':
+        headers.update({'HTTP-Referer': 'http://localhost', 'X-Title': 'TeamSync'})
+    for model in models:
+        body = {'model': model, 'temperature': 0.3, 'max_tokens': max_tokens, 'response_format': {'type': 'json_object'},
+                'messages': [{'role': 'system', 'content': 'Bạn là trợ lý lập lịch. Chỉ trả về một đối tượng JSON hợp lệ, không giải thích.'},
+                             {'role': 'user', 'content': prompt}]}
+        for wait in (0, 3):
+            if wait:
+                time_module.sleep(wait)
+            r = post_json(name, f'{base}/chat/completions', headers, body, read_timeout)
+            if r.status_code == 400 and 'response_format' in body:  # some models do not support JSON mode
+                body.pop('response_format')
+                r = post_json(name, f'{base}/chat/completions', headers, body, read_timeout)
+            if r.status_code not in OVERLOADED:
+                break
+            last = better(last, ('busy', 'đang quá tải'))
+        else:
+            continue
+        if r.status_code in (401, 403):
+            raise AIUnavailable('key', 'API key không hợp lệ')
+        if r.status_code == 429:
+            last = better(last, ('quota', 'hết lượt miễn phí / quá nhiều yêu cầu'))
+            continue
+        if r.status_code >= 400:
+            last = better(last, ('error', f'không dùng được model {model} (lỗi {r.status_code})'))
+            continue
+        try:
+            return parse_json_text(r.json()['choices'][0]['message']['content'])
+        except Exception:
+            last = better(last, ('invalid', 'trả kết quả không đọc được'))
+    raise AIUnavailable(*last)
+
+
+def providers():
+    out = []
+    if config_key('GEMINI_API_KEY'):
+        out.append(('gemini', 'Gemini', lambda p, t, m: gemini_call(p, t, m)))
+    if config_key('GROQ_API_KEY'):
+        key = config_key('GROQ_API_KEY')
+        out.append(('groq', 'Groq', lambda p, t, m: openai_call('Groq', 'https://api.groq.com/openai/v1', key,
+                                                                [config_key('GROQ_MODEL')] if config_key('GROQ_MODEL') else groq_models(key), p, t, m)))
+    if config_key('OPENROUTER_API_KEY'):
+        key = config_key('OPENROUTER_API_KEY')
+        out.append(('openrouter', 'OpenRouter', lambda p, t, m: openai_call('OpenRouter', 'https://openrouter.ai/api/v1', key,
+                                                                            [config_key('OPENROUTER_MODEL')] if config_key('OPENROUTER_MODEL') else openrouter_models(key), p, t, m)))
+    return out
+
+
+def ai_enabled():
+    return bool(providers())
+
+
+_used = threading.local()
+
+
+def gemini(prompt, read_timeout=60, max_tokens=2048):
+    """Ask the configured AI services in order (Gemini → Groq → OpenRouter); first valid answer wins."""
+    ps = providers()
+    if not ps:
+        raise AIUnavailable('no-key')
+    reasons = []
+    for key, label, call in ps:
+        try:
+            data = call(prompt, read_timeout, max_tokens)
+            _used.provider = (key, label)
+            return data
+        except AIUnavailable as e:
+            if e.reason != 'no-key':
+                reasons.append(f'{label}: {e.detail or NOTICE_SHORT.get(e.reason, e.reason)}')
+    raise AIUnavailable('error', '; '.join(reasons) or 'không có dịch vụ AI nào trả lời')
+
+
+NOTICE_SHORT = {'quota': 'hết lượt miễn phí', 'busy': 'đang quá tải', 'invalid': 'trả kết quả không đọc được', 'error': 'lỗi', 'key': 'API key không hợp lệ'}
+NOTICE = {'quota': 'AI hết lượt miễn phí, kế hoạch được tạo theo quy tắc.',
+          'error': 'Không gọi được AI, kế hoạch được tạo theo quy tắc.',
+          'key': 'Không gọi được AI, kế hoạch được tạo theo quy tắc.',
+          'busy': 'Không gọi được AI, kế hoạch được tạo theo quy tắc.',
+          'invalid': 'AI trả kết quả không hợp lệ, kế hoạch được tạo theo quy tắc.'}
+LABELS = {'gemini': 'Gemini', 'groq': 'Groq', 'openrouter': 'OpenRouter', 'rules': 'quy tắc'}
 
 
 def run(ai, rules):
-    """Try AI first, fall back to rules; returns (items, source, notice)."""
+    """Try AI first, fall back to rules; returns (items, source, notice). source = 'gemini' | 'groq' | 'openrouter' | 'rules'."""
+    _used.provider = None
     try:
         items = ai()
         if items:
-            return items, 'gemini', ''
+            return items, (_used.provider or ('gemini', 'Gemini'))[0], ''
         reason = 'invalid'
     except AIUnavailable as e:
         reason = e.reason
@@ -331,11 +477,84 @@ def describe(w):
 def block(w, start, end):
     title, cat, note = describe(w)
     return {'title': title[:200], 'category': cat, 'start': start.isoformat(), 'end': end.isoformat(),
-            'note': note, 'project_id': w['project_id'], 'project_name': w['project_name']}
+            'note': note, 'project_id': w['project_id'], 'project_name': w['project_name'], '_due': w['due']}
 
 
-def rule_schedule(lo, hi, work, busy):
-    per_day = {}
+# ---------------------------------------------------------------- wishes in the note ("không xếp ngày 2/12", "bận thứ 3")
+WEEKDAYS = {'2': 0, 'hai': 0, '3': 1, 'ba': 1, '4': 2, 'tư': 2, 'tu': 2, '5': 3, 'năm': 3, 'nam': 3, '6': 4, 'sáu': 4, 'sau': 4,
+            '7': 5, 'bảy': 5, 'bay': 5}
+NEG = re.compile(r'không|khong|tránh|tranh|bận|ban |nghỉ|nghi |trừ|tru |đừng|dung ', re.I)
+ADD = re.compile(r'\b(ôn|on thi|học|hoc|thêm|them|luyện|luyen|đọc|doc|chuẩn bị|chuan bi|làm thêm|lam them)\b', re.I)
+
+
+def in_window(day, month, lo, hi, year=None):
+    for y in ([year] if year else [lo.year, lo.year + 1]):
+        try:
+            d = date(y, month, day)
+        except ValueError:
+            continue
+        if lo - timedelta(days=31) <= d <= hi + timedelta(days=31):
+            return d
+    return None
+
+
+def blocked_days(note, lo, hi):
+    """Days the user asked to keep free, read from the note (dates d/m, ranges d/m–d/m, weekdays, 'cuối tuần')."""
+    if not note or not NEG.search(note):
+        return set()
+    out = set()
+    text = note.lower()
+    dm = r'(\d{1,2})\s*[/\-.]\s*(\d{1,2})(?:\s*[/\-.]\s*(\d{2,4}))?'
+    for m in re.finditer(dm + r'\s*(?:-|–|đến|den|tới|toi)\s*' + dm, text):
+        a = in_window(int(m[1]), int(m[2]), lo, hi, int(m[3]) % 100 + 2000 if m[3] else None)
+        b = in_window(int(m[4]), int(m[5]), lo, hi, int(m[6]) % 100 + 2000 if m[6] else None)
+        if a and b and a <= b and (b - a).days <= 62:
+            out |= {a + timedelta(days=i) for i in range((b - a).days + 1)}
+        text = text.replace(m[0], ' ')
+    for m in re.finditer(dm, text):
+        d = in_window(int(m[1]), int(m[2]), lo, hi, int(m[3]) % 100 + 2000 if m[3] else None)
+        if d:
+            out.add(d)
+    days = set()
+    for m in re.finditer(r'thứ\s*(2|3|4|5|6|7|hai|ba|tư|tu|năm|nam|sáu|sau|bảy|bay)\b|thu\s*(2|3|4|5|6|7)\b', text):
+        days.add(WEEKDAYS[m[1] or m[2]])
+    if re.search(r'chủ nhật|chu nhat|\bcn\b', text):
+        days.add(6)
+    if re.search(r'cuối tuần|cuoi tuan', text):
+        days |= {5, 6}
+    d = lo
+    while d <= hi:
+        if d.weekday() in days:
+            out.add(d)
+        d += timedelta(days=1)
+    return {d for d in out if lo <= d <= hi}
+
+
+def avoid(items, blocked, lo, hi):
+    """Move every entry off the days the user keeps free (earlier first, then later up to its deadline); drop if impossible."""
+    if not blocked:
+        return items
+    out = []
+    for i in items:
+        s, e = date.fromisoformat(i['start']), date.fromisoformat(i['end'])
+        last = min(hi, date.fromisoformat(i.get('_due') or hi.isoformat()))
+        span = (e - s).days
+        free = lambda a: all(a + timedelta(days=k) not in blocked for k in range(span + 1))
+        if not free(s):
+            earlier = [s - timedelta(days=k) for k in range(1, 15)]
+            later = [s + timedelta(days=k) for k in range(1, 15)]
+            ok = lambda a: lo <= a and a + timedelta(days=span) <= hi and free(a)
+            # earlier first; later only while it still ends by its deadline
+            s = next((a for a in earlier if ok(a)), None) or next((a for a in later if ok(a) and a + timedelta(days=span) <= last), None)
+            if s is None:
+                continue
+            e = s + timedelta(days=span)
+        out.append({**i, 'start': s.isoformat(), 'end': e.isoformat()})
+    return out
+
+
+def rule_schedule(lo, hi, work, busy, blocked=frozenset()):
+    per_day = {d: 99 for d in blocked}
     for b in busy:
         s, e = date.fromisoformat(b['start']), date.fromisoformat(b['end'])
         for i in range((e - s).days + 1):
@@ -374,10 +593,11 @@ def rule_schedule(lo, hi, work, busy):
 KIND = {'task': 'việc được giao', 'review': 'duyệt bài', 'peer': 'đánh giá chéo', 'final': 'chuẩn bị nộp đề bài', 'weekly': 'rà soát tuần'}
 
 
-def ai_schedule(lo, hi, work, busy, note, projects, read_timeout=60):
+def ai_schedule(lo, hi, work, busy, note, projects, read_timeout=60, blocked=frozenset()):
     """Compact prompt: only numbered work (kind, size, due) and busy-day counts are sent; Gemini returns
     [number, start, end] and the entries are rebuilt here (titles, projects and notes never leave the server)."""
     lines = '\n'.join(f"{i}|{KIND[w['kind']]}|KL {w['points']}|hạn {w['due'][5:]}" for i, w in enumerate(work, 1))
+    allow_new = bool(note and ADD.search(note))
     load = {}
     for b in busy:
         s, e = date.fromisoformat(b['start']), date.fromisoformat(b['end'])
@@ -390,9 +610,10 @@ def ai_schedule(lo, hi, work, busy, note, projects, read_timeout=60):
 Việc (số|loại|khối lượng|hạn MM-DD):
 {lines or '(không có)'}
 Ngày đã bận (MM-DD:số mục): {busy_text}
+TUYỆT ĐỐI không xếp vào các ngày: {', '.join(d.strftime('%m-%d') for d in sorted(blocked)) or 'không có'}
 Mong muốn: {note or 'không'}
-Mỗi việc 1 khoảng ngày kết thúc trước hoặc đúng hạn, mỗi ngày tối đa 2 mục, tránh ngày bận theo mong muốn.
-"them" chỉ dùng khi mong muốn có việc mới (ví dụ ôn thi), tối đa 5.
+Xếp MỌI việc trong danh sách, mỗi việc 1 khoảng ngày kết thúc trước hoặc đúng hạn, mỗi ngày tối đa 2 mục.
+{('"them": việc mới theo mong muốn (ví dụ ôn thi), tối đa 5.' if allow_new else '"them" luôn để [] (không thêm việc ngoài danh sách).')}
 {{"x":[[số,"YYYY-MM-DD","YYYY-MM-DD"]],"them":[["tên ngắn","YYYY-MM-DD","YYYY-MM-DD"]]}}"""
     data = gemini(prompt, read_timeout, max_tokens=1024)
     if not isinstance(data, dict):
@@ -411,7 +632,7 @@ Mỗi việc 1 khoảng ngày kết thúc trước hoặc đúng hạn, mỗi ng
             continue
         seen.add(row[0])
         out.append(block(w, s, e))
-    for row in (data.get('them') or [])[:5]:
+    for row in (data.get('them') or [])[:5] if allow_new else []:
         if not (isinstance(row, list) and len(row) >= 2 and isinstance(row[0], str) and row[0].strip()):
             continue
         s, e = parse_day(row[1]), parse_day(row[2] if len(row) > 2 else row[1])
@@ -441,22 +662,29 @@ _jobs_lock = threading.Lock()
 def schedule_inputs(uid, body):
     tz, note = tz_of(body), note_of(body)
     today, lo, hi = window_of(body, tz)
-    work, busy = personal_context(uid, tz, lo, hi)
+    work, _ = personal_context(uid, tz, lo, hi)
+    # Entries made by an earlier AI run (and not edited by hand) inside the window are re-arranged by this run.
+    rows = ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= lo, ScheduleItem.start_date <= hi).all()
+    replace = [x.id for x in rows if x.source == 'ai' and x.start_date >= lo]
+    busy = [{'title': x.title, 'start': x.start_date.isoformat(), 'end': x.end_date.isoformat()} for x in rows if x.id not in replace]
     projects = []
     for pid in sorted(my_project_ids(uid)):
         p = db.session.get(Project, pid)
         if p and p.status != 'archived':
             projects.append({'id': p.id, 'name': p.name})
-    return {'note': note, 'lo': lo, 'hi': hi, 'work': work, 'busy': busy, 'projects': projects}
+    return {'note': note, 'lo': lo, 'hi': hi, 'work': work, 'busy': busy, 'projects': projects, 'replace': replace,
+            'blocked': blocked_days(note, lo, hi)}
 
 
 def plan_schedule(uid, x, read_timeout=60):
-    items, source, notice = run(lambda: ai_schedule(x['lo'], x['hi'], x['work'], x['busy'], x['note'], x['projects'], read_timeout),
-                                lambda: rule_schedule(x['lo'], x['hi'], x['work'], x['busy']))
-    # Never propose an entry the user already has in this window (same title).
+    blocked = x.get('blocked') or set()
+    items, source, notice = run(lambda: ai_schedule(x['lo'], x['hi'], x['work'], x['busy'], x['note'], x['projects'], read_timeout, blocked),
+                                lambda: rule_schedule(x['lo'], x['hi'], x['work'], x['busy'], blocked))
+    items = avoid(items, blocked, x['lo'], x['hi'])  # enforced here whatever Gemini answered
+    # Never propose an entry the user already has (made by hand) in this window (same title).
     mine = ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= x['lo'], ScheduleItem.start_date <= x['hi']).all()
-    taken = {y.title.strip().lower() for y in mine}
-    items = [i for i in items if i['title'].strip().lower() not in taken][:MAX_ITEMS]
+    taken = {y.title.strip().lower() for y in mine if y.id not in set(x.get('replace') or [])}
+    items = [{k: v for k, v in i.items() if k != '_due'} for i in items if i['title'].strip().lower() not in taken][:MAX_ITEMS]
     if not items and not notice:
         notice = f'Không có việc mới cần xếp từ {x["lo"].strftime("%d/%m")} đến {x["hi"].strftime("%d/%m")}.'
     return items, source, notice
@@ -468,22 +696,41 @@ def run_job(app, job_id, uid, x):
         try:
             items, source, notice = plan_schedule(uid, x, JOB_READ_TIMEOUT)
             allowed = {p['id'] for p in x['projects']}
-            ids, payloads = [], []
+            ids, payloads, removed = [], [], []
+            if items:  # re-arrange: the earlier AI entries of this window give way to the new plan
+                for old in ScheduleItem.query.filter(ScheduleItem.id.in_(x['replace'] or [0]), ScheduleItem.owner_id == uid, ScheduleItem.source == 'ai'):
+                    removed.append({'title': old.title, 'category': old.category, 'start': old.start_date.isoformat(), 'end': old.end_date.isoformat(),
+                                    'note': old.note, 'project_id': old.project_id, 'source': 'ai'})
+                    db.session.delete(old)
             for i in items:
                 pid = i['project_id'] if i['project_id'] in allowed else None
                 row = ScheduleItem(owner_id=uid, project_id=pid, title=i['title'][:200], note=(i.get('note') or '')[:2000],
                                    category=i['category'] if i['category'] in EDITABLE else 'study',
-                                   start_date=date.fromisoformat(i['start']), end_date=date.fromisoformat(i['end']))
+                                   start_date=date.fromisoformat(i['start']), end_date=date.fromisoformat(i['end']), source='ai')
                 db.session.add(row)
                 db.session.flush()
                 ids.append(row.id)
-                payloads.append({'title': row.title, 'category': row.category, 'start': i['start'], 'end': i['end'], 'note': row.note, 'project_id': pid})
+                payloads.append({'title': row.title, 'category': row.category, 'start': i['start'], 'end': i['end'], 'note': row.note,
+                                 'project_id': pid, 'source': 'ai'})
+            blocked = sorted(d.strftime('%d/%m') for d in x.get('blocked') or [])
+            from .notifications import push
+            span = f'{x["lo"].strftime("%d/%m")} – {x["hi"].strftime("%d/%m")}'
+            push('ai.schedule', [uid], 'AI đã sắp xong lịch' if ids else 'AI sắp lịch: không có lịch mới',
+                 (f'Đã thêm {len(ids)} mục cho {span} ({LABELS.get(source, "AI")} sắp)' + (f', thay {len(removed)} mục AI cũ' if removed else '') if ids else (notice or f'Không có việc mới cần xếp cho {span}'))
+                 + (f' · đã tránh {", ".join(blocked)}' if blocked else ''), f'/timeline?view=created&from={x["lo"].isoformat()}')
             db.session.commit()
-            job.update(status='done', ids=ids, payloads=payloads, source=source, notice=notice, finished_at=iso(now()))
+            job.update(status='done', ids=ids, payloads=payloads, removed=removed, blocked=blocked, source=source, source_label=LABELS.get(source, 'AI'), notice=notice,
+                       finished_at=iso(now()))
         except Exception as e:  # keep the user informed; nothing half-saved
             db.session.rollback()
             log.exception('AI schedule job failed')
             job.update(status='failed', error='Không tạo được lịch AI. Thử lại sau.', finished_at=iso(now()))
+            try:
+                from .notifications import push
+                push('ai.schedule', [uid], 'AI sắp lịch thất bại', 'Không tạo được lịch AI. Thử lại sau.', '/timeline')
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         finally:
             db.session.remove()
 
@@ -506,8 +753,8 @@ def register(bp):
         need(a.due_at > now(), message='Đề bài đã hết hạn, không lập kế hoạch mới')
         items, source, notice = run(lambda: ai_plan(p, a, members, existing, note, tz),
                                     lambda: rule_plan(p, a, members, existing, tz))
-        return {'items': items, 'source': source, 'notice': notice, 'members': members,
-                'assignment_due_at': iso(a.due_at), 'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
+        return {'items': items, 'source': source, 'source_label': LABELS.get(source, 'AI'), 'notice': notice, 'members': members,
+                'assignment_due_at': iso(a.due_at), 'ai_enabled': ai_enabled()}
 
     @bp.post('/ai-schedule')
     @command()
@@ -517,8 +764,8 @@ def register(bp):
         uid = current_user().id
         x = schedule_inputs(uid, json_body())
         items, source, notice = plan_schedule(uid, x)
-        return {'items': items, 'source': source, 'notice': notice, 'from': x['lo'].isoformat(), 'to': x['hi'].isoformat(),
-                'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
+        return {'items': items, 'source': source, 'source_label': LABELS.get(source, 'AI'), 'notice': notice, 'from': x['lo'].isoformat(), 'to': x['hi'].isoformat(),
+                'ai_enabled': ai_enabled()}
 
     @bp.post('/ai-schedule/jobs')
     @command()
@@ -531,7 +778,7 @@ def register(bp):
         x = schedule_inputs(uid, json_body())
         job_id = uuid.uuid4().hex
         JOBS[job_id] = {'id': job_id, 'uid': uid, 'status': 'running', 'from': x['lo'].isoformat(), 'to': x['hi'].isoformat(),
-                        'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY')), 'started_at': iso(now())}
+                        'ai_enabled': ai_enabled(), 'started_at': iso(now())}
         threading.Thread(target=run_job, args=(current_app._get_current_object(), job_id, uid, x), daemon=True).start()
         return job_dto(JOBS[job_id]), 202
 

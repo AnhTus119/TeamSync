@@ -346,6 +346,7 @@ def request_extension(tid):
     x=DeadlineExtension(task_id=tid,requested_by=current_user().id,reason=textval(b,'reason'),old_due_at=t.due_at,requested_due_at=due)
     db.session.add(x)
     db.session.flush()
+    audit('extension.requested',x,pid=t.project_id,reason=x.reason)
     return dto(x),201
 
 
