@@ -71,7 +71,7 @@ const roleLabel = () => me.role === 'admin' ? 'Quản trị hệ thống' : isTe
 // clears the cache, so every page shows the result of the user's own action immediately and stays consistent.
 const CACHE_TTL = 5 * 60 * 1000;
 const cache = new Map();
-const cacheable = path => !path.startsWith('/auth/') && !path.includes('unread_only');
+const cacheable = path => !path.startsWith('/auth/') && !path.includes('unread_only') && !path.startsWith('/workflow/ai-jobs/');  // live status is never cached
 function clearCache() { cache.clear(); }
 async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   if (method === 'GET' && cacheable(path)) {
@@ -968,13 +968,15 @@ async function deleteItems(ids) {
   }
 }
 function aiHistoryBar() {
-  const x = aiHistory();
-  if (!x.undo.length && !x.redo.length) return '';
-  const last = x.undo.at(-1), next = x.redo.at(-1);
-  return `<div class="ai-history" role="group" aria-label="Lịch do AI sắp">${last ? `<button type="button" class="secondary" data-action="ai-undo" title="Xóa ${last.ids.length} mục AI vừa thêm">↶ Hoàn tác</button>` : ''}${next ? `<button type="button" class="secondary icon-only" data-action="ai-redo" aria-label="Làm lại: thêm lại ${next.payloads.length} mục AI" title="Làm lại: thêm lại ${next.payloads.length} mục AI">→</button>` : ''}</div>`;
+  // Both buttons always shown side by side; each is enabled only when that step is possible.
+  const x = aiHistory(), last = x.undo.at(-1), next = x.redo.at(-1);
+  return `<div class="ai-history" role="group" aria-label="Lịch do AI sắp">
+    <button type="button" class="secondary" data-action="ai-undo" ${last ? `title="Xóa ${last.ids.length} mục AI vừa thêm"` : 'disabled title="Chưa có lịch AI để hoàn tác"'}>↶ Hoàn tác</button>
+    <button type="button" class="secondary icon-only" data-action="ai-redo" ${next ? `aria-label="Làm lại: thêm lại ${next.payloads.length} mục AI" title="Làm lại: thêm lại ${next.payloads.length} mục AI"` : 'disabled aria-label="Làm lại" title="Chưa có bước nào để làm lại"'}>→</button></div>`;
 }
 async function aiUndo(btn) {
   const x = aiHistory(), batch = x.undo.pop();
+  btn?.closest('.toast')?.remove();
   if (!batch) return;
   await busy(btn, () => deleteItems(batch.ids));
   x.redo.push({payloads: batch.payloads}); saveAiHistory(x);
@@ -989,16 +991,62 @@ async function aiRedo(btn) {
 }
 function aiScheduleModal() {
   const range = `${dm(parseDay(tlData.from))} – ${dm(parseDay(tlData.to))}`;
-  return modal('AI sắp lịch', `<p class="small muted">AI xếp lịch cá nhân cho khoảng <b>${h(range)}</b> đang xem (từ hôm nay trở đi): công việc được giao, bài chờ bạn duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần, tránh trùng lịch đã có. Bấm Xác nhận là lịch được thêm ngay; không ưng thì bấm Hoàn tác.</p>
+  if (aiJobs().length) return notify('AI đang sắp lịch cho bạn, xem tiến trình ở góc dưới bên phải.');
+  return modal('AI sắp lịch', `<p class="small muted">AI xếp lịch cá nhân cho khoảng <b>${h(range)}</b> đang xem (từ hôm nay trở đi): công việc được giao, bài chờ bạn duyệt, phiếu đánh giá chéo, hạn nộp đề bài và buổi rà soát tiến độ hằng tuần, tránh trùng lịch đã có. Bấm Xác nhận là AI chạy nền: bạn có thể đi làm việc khác, khi xong lịch được thêm và có thông báo ở góc dưới bên phải.</p>
     <label>Mong muốn / ghi chú (tùy chọn)<textarea name="note" maxlength="1000" placeholder="Ví dụ: tối thứ 3 và thứ 5 đi làm thêm, muốn ôn thi Cơ sở dữ liệu vào cuối tuần…"></textarea></label>`,
     async f => {
-      const r = await api('/workflow/ai-schedule', {note: String(f.get('note') || '').trim(), tz_offset: tzOffset(), from: tlData.from, to: tlData.to});
-      if (!r.items.length) throw Error(r.notice || 'Không có việc mới cần xếp trong khoảng này.');
-      const payloads = r.items.map(x => ({title: x.title, category: x.category, start: x.start, end: x.end, note: x.note || '', project_id: x.project_id || null}));
-      const ids = await createItems(payloads);
-      const x = aiHistory(); x.undo.push({ids, payloads}); x.redo = []; saveAiHistory(x);
-      return `Đã thêm ${ids.length} mục lịch (${r.source === 'gemini' ? 'Gemini sắp' : 'sắp theo quy tắc'})${r.notice ? ' · ' + r.notice : ''}. Không ưng thì bấm Hoàn tác.`;
+      const job = await api('/workflow/ai-schedule/jobs', {note: String(f.get('note') || '').trim(), tz_offset: tzOffset(), from: tlData.from, to: tlData.to});
+      saveAiJobs([...aiJobs(), job.id]);
+      showJobToast(job);
+      pollAiJobs();
+      return 'AI đang sắp lịch, bạn có thể làm việc khác.';
     }, 'Xác nhận');
+}
+// ------------------------------------------------------------------ thông báo góc dưới bên phải + tác vụ AI chạy nền
+const AI_JOBS = 'ts-ai-jobs';
+const aiJobs = () => { try { return JSON.parse(sessionStorage.getItem(AI_JOBS)) || []; } catch { return []; } };
+const saveAiJobs = x => { try { sessionStorage.setItem(AI_JOBS, JSON.stringify(x)); } catch { /* private mode */ } };
+function toastBox() {
+  let box = document.getElementById('toasts');
+  if (!box) { box = document.createElement('div'); box.id = 'toasts'; box.setAttribute('aria-live', 'polite'); document.body.append(box); }
+  return box;
+}
+function toast(id, html, {kind = '', timeout = 0} = {}) {
+  const box = toastBox();
+  let t = box.querySelector(`[data-toast="${id}"]`);
+  if (!t) { t = document.createElement('div'); t.dataset.toast = id; box.append(t); }
+  t.className = 'toast ' + kind;
+  t.innerHTML = `<div class="toast-body">${html}</div><button type="button" class="toast-close" aria-label="Đóng thông báo">×</button>`;
+  t.querySelector('.toast-close').onclick = () => t.remove();
+  clearTimeout(t._timer);
+  if (timeout) t._timer = setTimeout(() => t.remove(), timeout);
+  return t;
+}
+function showJobToast(job) {
+  toast('job-' + job.id, `<span class="spinner" aria-hidden="true"></span><div><b>AI đang sắp lịch</b><br><small>${h(dm(parseDay(job.from)))} – ${h(dm(parseDay(job.to)))} · Bạn có thể làm việc khác, có thể mất tới vài phút.</small></div>`, {kind: 'running'});
+}
+let pollTimer = null;
+async function pollAiJobs() {
+  clearTimeout(pollTimer);
+  const ids = aiJobs();
+  if (!ids.length || !me) return;
+  const left = [];
+  for (const id of ids) {
+    let job;
+    try { job = await api('/workflow/ai-jobs/' + id); }
+    catch (e) { if (e.status === 404) { toast('job-' + id, '<b>Không còn theo dõi được tác vụ AI</b><br><small>Máy chủ đã khởi động lại. Hãy chạy AI sắp lịch lại.</small>', {kind: 'error', timeout: 12000}); continue; } left.push(id); continue; }
+    if (job.status === 'running') { left.push(id); showJobToast(job); continue; }
+    clearCache();  // the server saved new entries: every page must read fresh data
+    if (job.status === 'failed') { toast('job-' + id, `<b>AI sắp lịch thất bại</b><br><small>${h(job.error)}</small>`, {kind: 'error', timeout: 15000}); continue; }
+    if (job.ids.length) { const x = aiHistory(); x.undo.push({ids: job.ids, payloads: job.payloads}); x.redo = []; saveAiHistory(x); }
+    const via = job.source === 'gemini' ? 'Gemini sắp' : 'sắp theo quy tắc';
+    toast('job-' + id, job.ids.length
+      ? `<div><b>Đã thêm ${job.ids.length} mục lịch</b> (${via})<br>${job.notice ? `<small>${h(job.notice)}</small><br>` : ''}<a href="/timeline?view=created&from=${h(job.from)}">Xem lịch</a> · <button type="button" class="link-btn" data-action="ai-undo">Hoàn tác</button></div>`
+      : `<div><b>Không có lịch mới</b><br><small>${h(job.notice || 'Không có việc mới cần xếp.')}</small></div>`, {kind: job.ids.length ? 'ok' : '', timeout: 20000});
+    if (location.pathname === '/timeline' && !document.querySelector('dialog[open]')) attempt(() => render());
+  }
+  saveAiJobs(left);
+  if (left.length) pollTimer = setTimeout(pollAiJobs, 3000);
 }
 
 // ------------------------------------------------------------------ Bài nộp
@@ -1323,6 +1371,7 @@ async function boot() {
   if (Math.abs(clockOffset) < 120000) clockOffset = 0;
   setupChrome();
   await render();
+  pollAiJobs();  // resume background AI jobs started before a reload
 }
 addEventListener('popstate', e => { if (me) attempt(() => render({scroll: e.state?.y ?? 'top'})); });
 boot().catch(e => { $('#view').innerHTML = panel('Không tải được nội dung', `<p>${h(e.message)}</p>${link('Về tổng quan', '/home')}`); });

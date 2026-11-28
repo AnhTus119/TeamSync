@@ -11,6 +11,7 @@ bộ sinh theo quy tắc nên luôn có kết quả. Đầu ra AI được kiể
 """
 import json
 import logging
+import time as time_module
 from datetime import date, datetime, time, timedelta, timezone
 import requests
 from flask import current_app
@@ -83,22 +84,41 @@ def google_error(r):
     return 'error', f'Gemini báo lỗi {r.status_code}' + (f': {msg}' if msg else '')
 
 
-def gemini(prompt):
+OVERLOADED = (500, 502, 503, 504)
+
+
+def gemini(prompt, read_timeout=60, max_tokens=2048):
     key = (current_app.config.get('GEMINI_API_KEY') or '').strip().strip('"').strip("'")
     if not key:
         raise AIUnavailable('no-key')
     configured = (current_app.config.get('GEMINI_MODEL') or '').strip()
     models = list(dict.fromkeys([m for m in (configured, *FALLBACK_MODELS) if m]))
-    body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
-            'generationConfig': {'temperature': 0.4, 'responseMimeType': 'application/json'}}
     last = ('error', '')
     for model in models:
-        try:
-            r = requests.post(GEMINI_URL.format(model=model), headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
-                              json=body, timeout=25)
-        except requests.RequestException as e:
-            log.warning('Gemini request failed: %s', type(e).__name__)
-            raise AIUnavailable('error', 'Không kết nối được tới Gemini (kiểm tra mạng / tường lửa).')
+        config = {'temperature': 0.3, 'responseMimeType': 'application/json', 'maxOutputTokens': max_tokens}
+        if '2.5' in model and 'pro' not in model:
+            config['thinkingConfig'] = {'thinkingBudget': 0}  # no "thinking" step: answers in seconds instead of ~30 s
+        body = {'contents': [{'role': 'user', 'parts': [{'text': prompt}]}], 'generationConfig': config}
+        for attempt, wait in enumerate((0, 3)):  # overloaded (503): wait and retry once, then try the next model
+            if wait:
+                time_module.sleep(wait)
+            try:
+                r = requests.post(GEMINI_URL.format(model=model), headers={'x-goog-api-key': key, 'Content-Type': 'application/json'},
+                                  json=body, timeout=(15, read_timeout))
+            except requests.ConnectTimeout as e:
+                log.warning('Gemini request failed: %s', type(e).__name__)
+                raise AIUnavailable('error', 'Không mở được kết nối tới Gemini trong 15 giây (mạng / tường lửa / proxy).')
+            except requests.Timeout as e:
+                log.warning('Gemini request failed: %s', type(e).__name__)
+                raise AIUnavailable('error', f'Gemini phản hồi quá lâu (quá {read_timeout} giây), thử lại sau.')
+            except requests.RequestException as e:
+                log.warning('Gemini request failed: %s', type(e).__name__)
+                raise AIUnavailable('error', f'Không kết nối được tới Gemini ({type(e).__name__}); kiểm tra mạng / tường lửa.')
+            if r.status_code not in OVERLOADED:
+                break
+            last = ('busy', 'Gemini đang quá tải (lỗi 503 phía Google), đã thử lại nhưng chưa được. Thử lại sau ít phút.')
+        else:
+            continue  # still overloaded: next model
         if r.status_code == 404:  # model name not available for this key: try the next one
             last = ('error', f'Không tìm thấy model {model}.')
             continue
@@ -119,6 +139,7 @@ def gemini(prompt):
 NOTICE = {'quota': 'Gemini đã hết lượt miễn phí, kế hoạch được tạo theo quy tắc.',
           'error': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
           'key': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
+          'busy': 'Không gọi được Gemini, kế hoạch được tạo theo quy tắc.',
           'invalid': 'Gemini trả kết quả không hợp lệ, kế hoạch được tạo theo quy tắc.'}
 
 
@@ -198,17 +219,18 @@ def rule_plan(p, a, members, existing, tz):
 
 
 def ai_plan(p, a, members, existing, note, tz):
+    """Compact prompt: members are numbered 1..n; Gemini answers with the number, we map it back."""
     start, end = plan_window(a, tz)
-    prompt = f"""Bạn là trợ lý lập kế hoạch cho nhóm sinh viên làm bài tập lớn. Trả lời bằng tiếng Việt, CHỈ trả JSON.
-Đề bài: {a.title}
-Mô tả đề bài: {(a.brief or '')[:3000]}
-Ngày bắt đầu: {start.isoformat()}  Hạn cuối của các công việc: {end.isoformat()}
-Thành viên (id, tên, vai trò, khối lượng đang mở): {json.dumps(members, ensure_ascii=False)}
-Công việc đã có (không lặp lại): {json.dumps(existing[:60], ensure_ascii=False)}
-Ghi chú của trưởng nhóm: {note or '(không có)'}
-Yêu cầu: chia thành các giai đoạn hợp lý, tối đa {MAX_TASKS} công việc cụ thể, chia đều khối lượng (ưu tiên người đang ít việc),
-hạn tăng dần theo giai đoạn, nằm trong khoảng ngày trên. Định dạng:
-{{"tasks":[{{"phase":"tên giai đoạn","title":"tên công việc ngắn","description":"đầu ra cần bàn giao","responsible_id":<id thành viên>,"due_date":"YYYY-MM-DD","points":1|2|3|5,"priority":"low|medium|high"}}]}}"""
+    people = '\n'.join(f"{i} {m['name']}{' (trưởng nhóm)' if m['role'] == 'leader' else ''}, đang mở {m['open_points']} điểm"
+                       for i, m in enumerate(members, 1))
+    prompt = f"""Lập kế hoạch bài tập lớn cho nhóm sinh viên. CHỈ trả JSON, tiếng Việt, ngắn gọn.
+Đề: {a.title}. {(a.brief or '')[:1200]}
+Từ {start.isoformat()} đến {end.isoformat()}. Thành viên (số thứ tự):
+{people}
+Đã có, không lặp: {'; '.join(x[:60] for x in existing[:30]) or 'không'}
+Ghi chú: {note or 'không'}
+Tối đa {MAX_TASKS} việc, chia đều (ưu tiên người ít việc), hạn tăng dần theo giai đoạn.
+{{"tasks":[{{"phase":"giai đoạn","title":"tên việc","description":"đầu ra","m":<số thành viên>,"due_date":"YYYY-MM-DD","points":1|2|3|5,"priority":"low|medium|high"}}]}}"""
     data = gemini(prompt)
     ids = {m['id'] for m in members}
     taken = {x.strip().lower() for x in existing}
@@ -218,7 +240,8 @@ hạn tăng dần theo giai đoạn, nằm trong khoảng ngày trên. Định d
             continue
         title = str(x.get('title') or '').strip()[:200]
         due = parse_day(x.get('due_date'))
-        rid = x.get('responsible_id')
+        n = x.get('m')
+        rid = members[n - 1]['id'] if isinstance(n, int) and 1 <= n <= len(members) else x.get('responsible_id')
         if not title or title.lower() in taken or rid not in ids or not due:
             continue
         due = min(max(due, start), end)
@@ -291,6 +314,26 @@ def personal_context(uid, tz, lo, hi):
     return work, busy
 
 
+def describe(w):
+    """Title, category and note of a planned block for one numbered piece of work (used by rules and Gemini)."""
+    due = date.fromisoformat(w['due'])
+    if w['kind'] == 'task':
+        return f'Làm: {w["title"]}', 'study', f'Hoàn thành trước hạn {due.strftime("%d/%m")} để còn thời gian rà soát và nộp.'
+    if w['kind'] == 'review':
+        return f'Duyệt bài: {w["title"]}', 'review', 'Bài nộp đang chờ bạn duyệt.'
+    if w['kind'] == 'peer':
+        return f'Đánh giá chéo: {w["title"]}', 'review', 'Phiếu đánh giá chéo đóng sau 7 ngày kể từ khi công việc hoàn thành.'
+    if w['kind'] == 'final':
+        return f'Chuẩn bị nộp bài: {w["title"]}', 'deadline', f'Rà soát sản phẩm và báo cáo nhóm trước hạn nộp {due.strftime("%d/%m")}.'
+    return f'Rà soát tiến độ tuần: {w["title"]}', 'meeting', 'Cập nhật việc đã xong, việc trễ và phân công tuần tới.'
+
+
+def block(w, start, end):
+    title, cat, note = describe(w)
+    return {'title': title[:200], 'category': cat, 'start': start.isoformat(), 'end': end.isoformat(),
+            'note': note, 'project_id': w['project_id'], 'project_name': w['project_name']}
+
+
 def rule_schedule(lo, hi, work, busy):
     per_day = {}
     for b in busy:
@@ -310,61 +353,143 @@ def rule_schedule(lo, hi, work, busy):
             while start > lo and any(per_day.get(start + timedelta(days=i), 0) >= 2 for i in range((end - start).days + 1)):
                 start -= timedelta(days=1)
                 end -= timedelta(days=1)
-            title, cat = f'Làm: {w["title"]}', 'study'
-            note = f'Hoàn thành trước hạn {due.strftime("%d/%m")} để còn thời gian rà soát và nộp.'
         elif w['kind'] == 'review':
             start = end = lo if per_day.get(lo, 0) < 2 else min(lo + timedelta(days=1), hi)
-            title, cat, note = f'Duyệt bài: {w["title"]}', 'review', 'Bài nộp đang chờ bạn duyệt.'
         elif w['kind'] == 'peer':
             start = end = min(max(lo, due - timedelta(days=1)), hi)
-            title, cat, note = f'Đánh giá chéo: {w["title"]}', 'review', 'Phiếu đánh giá chéo đóng sau 7 ngày kể từ khi công việc hoàn thành.'
         elif w['kind'] == 'final':
             end = min(max(lo, due - timedelta(days=1)), hi)
             start = max(lo, end - timedelta(days=2))
-            title, cat, note = f'Chuẩn bị nộp bài: {w["title"]}', 'deadline', f'Rà soát sản phẩm và báo cáo nhóm trước hạn nộp {due.strftime("%d/%m")}.'
         else:
             start = end = min(due, hi)
-            title, cat, note = f'Rà soát tiến độ tuần: {w["title"]}', 'meeting', 'Cập nhật việc đã xong, việc trễ và phân công tuần tới.'
         if start > hi or end < lo:
             continue
         for i in range((end - start).days + 1):
             d = start + timedelta(days=i)
             per_day[d] = per_day.get(d, 0) + 1
-        out.append({'title': title[:200], 'category': cat, 'start': start.isoformat(), 'end': end.isoformat(),
-                    'note': note, 'project_id': w['project_id'], 'project_name': w['project_name']})
+        out.append(block(w, start, end))
     return out
 
 
-def ai_schedule(lo, hi, work, busy, note, projects):
-    prompt = f"""Bạn là trợ lý sắp lịch học tập cho một sinh viên. Trả lời bằng tiếng Việt, CHỈ trả JSON.
-Chỉ xếp lịch trong khoảng từ {lo.isoformat()} tới {hi.isoformat()}.
-Việc cần làm (kind: task=công việc được giao, review=bài chờ duyệt, peer=phiếu đánh giá chéo, final=hạn nộp đề bài, weekly=gợi ý rà soát tuần; due=hạn): {json.dumps(work, ensure_ascii=False)}
-Lịch đã có (tránh trùng, tránh quá tải): {json.dumps(busy, ensure_ascii=False)}
-Mong muốn của sinh viên: {note or '(không có)'}
-Yêu cầu: tối đa {MAX_ITEMS} mục, mỗi mục kết thúc trước hạn của việc đó, mỗi ngày không quá 2 mục, thêm mục tự học/ôn tập nếu sinh viên yêu cầu.
-category thuộc {EDITABLE}. project_id lấy từ việc tương ứng hoặc null. Định dạng:
-{{"items":[{{"title":"...","category":"study","start":"YYYY-MM-DD","end":"YYYY-MM-DD","note":"...","project_id":<id hoặc null>}}]}}"""
-    data = gemini(prompt)
-    names = {p['id']: p['name'] for p in projects}
-    out = []
-    for x in (data.get('items') if isinstance(data, dict) else None) or []:
-        if not isinstance(x, dict):
+KIND = {'task': 'việc được giao', 'review': 'duyệt bài', 'peer': 'đánh giá chéo', 'final': 'chuẩn bị nộp đề bài', 'weekly': 'rà soát tuần'}
+
+
+def ai_schedule(lo, hi, work, busy, note, projects, read_timeout=60):
+    """Compact prompt: only numbered work (kind, size, due) and busy-day counts are sent; Gemini returns
+    [number, start, end] and the entries are rebuilt here (titles, projects and notes never leave the server)."""
+    lines = '\n'.join(f"{i}|{KIND[w['kind']]}|KL {w['points']}|hạn {w['due'][5:]}" for i, w in enumerate(work, 1))
+    load = {}
+    for b in busy:
+        s, e = date.fromisoformat(b['start']), date.fromisoformat(b['end'])
+        for k in range((e - s).days + 1):
+            d = s + timedelta(days=k)
+            if lo <= d <= hi:
+                load[d] = load.get(d, 0) + 1
+    busy_text = ', '.join(f'{d.strftime("%m-%d")}:{n}' for d, n in sorted(load.items())) or 'không'
+    prompt = f"""Sắp lịch học cho sinh viên trong {lo.isoformat()}..{hi.isoformat()}. CHỈ trả JSON.
+Việc (số|loại|khối lượng|hạn MM-DD):
+{lines or '(không có)'}
+Ngày đã bận (MM-DD:số mục): {busy_text}
+Mong muốn: {note or 'không'}
+Mỗi việc 1 khoảng ngày kết thúc trước hoặc đúng hạn, mỗi ngày tối đa 2 mục, tránh ngày bận theo mong muốn.
+"them" chỉ dùng khi mong muốn có việc mới (ví dụ ôn thi), tối đa 5.
+{{"x":[[số,"YYYY-MM-DD","YYYY-MM-DD"]],"them":[["tên ngắn","YYYY-MM-DD","YYYY-MM-DD"]]}}"""
+    data = gemini(prompt, read_timeout, max_tokens=1024)
+    if not isinstance(data, dict):
+        return []
+    out, seen = [], set()
+    for row in data.get('x') or []:
+        if not (isinstance(row, list) and len(row) >= 2 and isinstance(row[0], int) and 1 <= row[0] <= len(work)) or row[0] in seen:
             continue
-        title = str(x.get('title') or '').strip()[:200]
-        s, e = parse_day(x.get('start')), parse_day(x.get('end') or x.get('start'))
-        if not title or not s or not e:
+        w = work[row[0] - 1]
+        s, e = parse_day(row[1]), parse_day(row[2] if len(row) > 2 else row[1])
+        if not s or not e:
+            continue
+        last = min(hi, date.fromisoformat(w['due']))
+        s, e = max(s, lo), min(e, last)
+        if e < s:
+            continue
+        seen.add(row[0])
+        out.append(block(w, s, e))
+    for row in (data.get('them') or [])[:5]:
+        if not (isinstance(row, list) and len(row) >= 2 and isinstance(row[0], str) and row[0].strip()):
+            continue
+        s, e = parse_day(row[1]), parse_day(row[2] if len(row) > 2 else row[1])
+        if not s or not e:
             continue
         s, e = max(s, lo), min(e, hi)
-        if e < s or (e - s).days >= 60:
+        if e < s:
             continue
-        pid = x.get('project_id') if x.get('project_id') in names else None
-        out.append({'title': title, 'category': x.get('category') if x.get('category') in EDITABLE else 'study',
-                    'start': s.isoformat(), 'end': e.isoformat(), 'note': str(x.get('note') or '').strip()[:2000],
-                    'project_id': pid, 'project_name': names.get(pid, '')})
+        out.append({'title': row[0].strip()[:100], 'category': 'study', 'start': s.isoformat(), 'end': e.isoformat(),
+                    'note': 'Theo mong muốn bạn nhập khi sắp lịch.', 'project_id': None, 'project_name': ''})
         if len(out) >= MAX_ITEMS:
             break
     out.sort(key=lambda x: x['start'])
-    return out
+    return out[:MAX_ITEMS]
+
+
+# ---------------------------------------------------------------- background jobs (AI sắp lịch chạy nền)
+# The request only gathers the user's data; the slow part (Gemini, up to JOB_READ_TIMEOUT seconds) runs in a
+# thread that then saves the entries itself, so the user can leave the dialog and keep working.
+import threading
+import uuid
+JOB_READ_TIMEOUT = 180
+JOBS = {}
+_jobs_lock = threading.Lock()
+
+
+def schedule_inputs(uid, body):
+    tz, note = tz_of(body), note_of(body)
+    today, lo, hi = window_of(body, tz)
+    work, busy = personal_context(uid, tz, lo, hi)
+    projects = []
+    for pid in sorted(my_project_ids(uid)):
+        p = db.session.get(Project, pid)
+        if p and p.status != 'archived':
+            projects.append({'id': p.id, 'name': p.name})
+    return {'note': note, 'lo': lo, 'hi': hi, 'work': work, 'busy': busy, 'projects': projects}
+
+
+def plan_schedule(uid, x, read_timeout=60):
+    items, source, notice = run(lambda: ai_schedule(x['lo'], x['hi'], x['work'], x['busy'], x['note'], x['projects'], read_timeout),
+                                lambda: rule_schedule(x['lo'], x['hi'], x['work'], x['busy']))
+    # Never propose an entry the user already has in this window (same title).
+    mine = ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= x['lo'], ScheduleItem.start_date <= x['hi']).all()
+    taken = {y.title.strip().lower() for y in mine}
+    items = [i for i in items if i['title'].strip().lower() not in taken][:MAX_ITEMS]
+    if not items and not notice:
+        notice = f'Không có việc mới cần xếp từ {x["lo"].strftime("%d/%m")} đến {x["hi"].strftime("%d/%m")}.'
+    return items, source, notice
+
+
+def run_job(app, job_id, uid, x):
+    with app.app_context():
+        job = JOBS[job_id]
+        try:
+            items, source, notice = plan_schedule(uid, x, JOB_READ_TIMEOUT)
+            allowed = {p['id'] for p in x['projects']}
+            ids, payloads = [], []
+            for i in items:
+                pid = i['project_id'] if i['project_id'] in allowed else None
+                row = ScheduleItem(owner_id=uid, project_id=pid, title=i['title'][:200], note=(i.get('note') or '')[:2000],
+                                   category=i['category'] if i['category'] in EDITABLE else 'study',
+                                   start_date=date.fromisoformat(i['start']), end_date=date.fromisoformat(i['end']))
+                db.session.add(row)
+                db.session.flush()
+                ids.append(row.id)
+                payloads.append({'title': row.title, 'category': row.category, 'start': i['start'], 'end': i['end'], 'note': row.note, 'project_id': pid})
+            db.session.commit()
+            job.update(status='done', ids=ids, payloads=payloads, source=source, notice=notice, finished_at=iso(now()))
+        except Exception as e:  # keep the user informed; nothing half-saved
+            db.session.rollback()
+            log.exception('AI schedule job failed')
+            job.update(status='failed', error='Không tạo được lịch AI. Thử lại sau.', finished_at=iso(now()))
+        finally:
+            db.session.remove()
+
+
+def job_dto(job):
+    return {k: v for k, v in job.items() if k != 'uid'}
 
 
 # ---------------------------------------------------------------- routes
@@ -387,23 +512,32 @@ def register(bp):
     @bp.post('/ai-schedule')
     @command()
     def ai_schedule_route():
+        """Synchronous proposal (no saving); kept for scripts and tests."""
         need(current_user().role != 'admin', 'FORBIDDEN', 'Tài khoản quản trị không dùng lịch học tập', 403)
-        b = json_body()
-        tz, note = tz_of(b), note_of(b)
         uid = current_user().id
-        today, lo, hi = window_of(b, tz)
-        work, busy = personal_context(uid, tz, lo, hi)
-        projects = []
-        for pid in sorted(my_project_ids(uid)):
-            p = db.session.get(Project, pid)
-            if p and p.status != 'archived':
-                projects.append({'id': p.id, 'name': p.name})
-        items, source, notice = run(lambda: ai_schedule(lo, hi, work, busy, note, projects), lambda: rule_schedule(lo, hi, work, busy))
-        # Never propose an entry the user already has in this window (same title).
-        mine = ScheduleItem.query.filter(ScheduleItem.owner_id == uid, ScheduleItem.end_date >= lo, ScheduleItem.start_date <= hi).all()
-        taken = {y.title.strip().lower() for y in mine}
-        items = [x for x in items if x['title'].strip().lower() not in taken][:MAX_ITEMS]
-        if not items and not notice:
-            notice = f'Không có việc mới cần xếp từ {lo.strftime("%d/%m")} đến {hi.strftime("%d/%m")}.'
-        return {'items': items, 'source': source, 'notice': notice, 'from': lo.isoformat(), 'to': hi.isoformat(),
+        x = schedule_inputs(uid, json_body())
+        items, source, notice = plan_schedule(uid, x)
+        return {'items': items, 'source': source, 'notice': notice, 'from': x['lo'].isoformat(), 'to': x['hi'].isoformat(),
                 'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY'))}
+
+    @bp.post('/ai-schedule/jobs')
+    @command()
+    def ai_schedule_job_start():
+        """Start AI sắp lịch in the background; the entries are saved when it finishes."""
+        need(current_user().role != 'admin', 'FORBIDDEN', 'Tài khoản quản trị không dùng lịch học tập', 403)
+        uid = current_user().id
+        with _jobs_lock:
+            need(not any(j['uid'] == uid and j['status'] == 'running' for j in JOBS.values()), 'JOB_RUNNING', 'AI đang sắp lịch cho bạn, chờ xong rồi thử lại', 409)
+        x = schedule_inputs(uid, json_body())
+        job_id = uuid.uuid4().hex
+        JOBS[job_id] = {'id': job_id, 'uid': uid, 'status': 'running', 'from': x['lo'].isoformat(), 'to': x['hi'].isoformat(),
+                        'ai_enabled': bool(current_app.config.get('GEMINI_API_KEY')), 'started_at': iso(now())}
+        threading.Thread(target=run_job, args=(current_app._get_current_object(), job_id, uid, x), daemon=True).start()
+        return job_dto(JOBS[job_id]), 202
+
+    @bp.get('/ai-jobs/<job_id>')
+    @command()
+    def ai_job(job_id):
+        job = JOBS.get(job_id)
+        need(job and job['uid'] == current_user().id, 'NOT_FOUND', 'Không tìm thấy tác vụ AI (máy chủ có thể đã khởi động lại)', 404)
+        return job_dto(job)
