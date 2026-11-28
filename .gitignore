@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 instance/
+# bản sao lưu dữ liệu chạy local (vd. instance-cu/), không bao giờ commit
+instance*/
+*-secret.txt
 uploads/
 test-artifacts/
 *.db

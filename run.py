@@ -23,6 +23,47 @@ if not secret_file.exists():
     except OSError:
         pass
 os.environ["SECRET_KEY"] = secret_file.read_text(encoding="utf-8").strip()
+
+
+def retire_old_demo_database():
+    """Older TeamSync versions used the same file with other demo accounts (admin@gmail.com, gv1@gmail.com…).
+    Such a database is renamed (kept as a backup, never deleted) so the current demo and the README accounts
+    are created. A database that is not a recognisable old demo is left untouched."""
+    import sqlite3
+    from datetime import datetime
+
+    db_file = INSTANCE / "teamsync-workspace.db"
+    if not db_file.exists():
+        return
+    try:
+        con = sqlite3.connect(str(db_file))
+        try:
+            tables = {r[0] for r in con.execute("select name from sqlite_master where type='table'")}
+            keys = {r[0] for r in con.execute("select key from runtime_setting")} if "runtime_setting" in tables else set()
+            emails = {r[0] for r in con.execute("select lower(email) from user")} if "user" in tables else set()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return
+    if "khmt_demo_v1" in keys:
+        return  # already the current demo
+    old_markers = {"campus_demo_v2", "organization_demo_v1", "ui_showcase_v1", "workspace_demo_v2", "schedule_demo_v1", "random_batches"}
+    old_accounts = {"admin@gmail.com", "gv1@gmail.com", "gv2@gmail.com", "sv1@gmail.com", "minhanh@gmail.com"}
+    if not (keys & old_markers or emails & old_accounts):
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = INSTANCE / f"teamsync-workspace-ban-cu-{stamp}.db"
+    db_file.rename(backup)
+    private = INSTANCE / "private"
+    if private.exists():
+        private.rename(INSTANCE / f"private-ban-cu-{stamp}")
+    print(
+        "Database demo của phiên bản cũ (tài khoản @gmail.com) đã được sao lưu thành " + backup.name
+        + ". Đang tạo dữ liệu demo mới: dùng các tài khoản trong README, mật khẩu 12345."
+    )
+
+
+retire_old_demo_database()
 from app import create_app
 
 app = create_app()
