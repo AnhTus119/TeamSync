@@ -4,13 +4,17 @@ from flask import Blueprint, request, send_file, render_template, redirect
 from .core import *
 from .collaboration import group_report, mentor_ids, complaint_dto
 from ..models.workflow import GroupDeparture, ReportSnapshot, DeadlineReminder, GroupDelivery
-from ..models.teamwork import Meeting, MatrixReview
+from ..models.teamwork import Meeting
 from ..m06_projects.academic_api import project_dto, add_group_member
 bp=Blueprint('workflow',__name__,url_prefix='/api/v1/workflow')
 from . import evidence as _evidence
 _evidence.register(bp)
 from . import schedule as _schedule
 _schedule.register(bp)
+from . import task_review as _task_review
+_task_review.register(bp)
+from . import ai_plan as _ai_plan
+_ai_plan.register(bp)
 
 def members(pid):
     return AssignmentMembership.query.filter_by(project_id=pid,status='active').all()
@@ -33,15 +37,17 @@ def home():
     for e in es:
         c=get(CourseOffering,e.course_id)
         a=Assignment.query.filter_by(course_id=c.id).first()
-        ps=Project.query.filter_by(assignment_id=a.id).all() if a and (not a.is_hidden or e.role in STAFF) else []
+        ps=Project.query.filter_by(assignment_id=a.id,mode='academic').filter(Project.status!='archived').order_by(Project.id).all() if a and (not a.is_hidden or e.role in STAFF) else []
         if e.role=='student':ps=[p for p in ps if membership(p.id)]
         cards=[]
         for p in ps:
-            ts=Task.query.filter_by(project_id=p.id).all()
-            cards.append({'id':p.id,'name':p.name,'status':p.status,'total':len(ts),'done':sum(t.status=='done' for t in ts),'late':sum(t.status not in ('done','review') and t.due_at<now() for t in ts),'help':HelpRequest.query.filter(HelpRequest.project_id==p.id,HelpRequest.status.in_(['submitted','under_review'])).count()})
-            if e.role=='student':
-                tasks.extend([{**task_summary(t),'project_name':p.name,'course_title':c.title,'course_id':c.id} for t in ts if TaskParticipant.query.filter_by(task_id=t.id,user_id=current_user().id).first() or (membership(p.id).role=='leader' and t.status=='review')])
-            elif p.status=='pending':pending.append({'id':p.id,'name':p.name,'course_title':c.title})
+            m=membership(p.id)
+            card=_evidence.project_card(p,c,a,e.role if e.role in STAFF else (m.role if m else 'member'))
+            ms=AssignmentMembership.query.filter_by(project_id=p.id,status='active').order_by(AssignmentMembership.id).all()
+            card['leader']=next((user_brief(x.user_id) for x in ms if x.role=='leader'),None)
+            card['member_names']=[user_brief(x.user_id)['full_name'] for x in sorted(ms,key=lambda x:x.role!='leader')]
+            cards.append(card)
+            if e.role in STAFF and p.status=='pending':pending.append({'id':p.id,'name':p.name,'course_title':c.title})
         courses.append({**dto(c),'my_role':e.role,'assignment':dto(a) if a and (not a.is_hidden or e.role in STAFF) else None,'groups':cards})
     return {'courses':courses,'tasks':tasks,'pending_groups':pending,**_evidence.dashboard_data()}
 
@@ -145,50 +151,6 @@ def minutes(pid):
     m=Meeting(project_id=pid,host_id=current_user().id,title=textval(b,'title'),room_name='minutes-'+secrets.token_hex(12),notes=textval(b,'notes')+('\nLink cuộc họp: '+link if link else ''),status='ended',ended_at=now())
     db.session.add(m);audit('minutes.saved',m,pid=pid);return dto(m),201
 
-@bp.get('/projects/<int:pid>/peer')
-@command()
-def peer(pid):
-    p=project(pid);r=PeerRound.query.filter_by(assignment_id=p.assignment_id).order_by(PeerRound.id.desc()).first()
-    opened=bool(r and r.status=='open' and r.opens_at<=now()<=r.closes_at)
-    own=MatrixReview.query.filter_by(project_id=pid,round_id=r.id,reviewer_id=current_user().id).all() if r and membership(pid) else []
-    return {'round':dto(r) if r else None,'open':opened,'members':[user_brief(m.user_id) for m in members(pid) if m.user_id!=current_user().id], 'own':[{'reviewee_id':x.reviewee_id,'attitude':x.attitude10,'quality':x.quality10} for x in own], 'results':peer_results(p)}
-
-def peer_results(p):
-    rounds=PeerRound.query.filter_by(assignment_id=p.assignment_id).order_by(PeerRound.id.desc()).all()
-    out=[]
-    for r in rounds:
-        if r.status=='open' and now()<=r.closes_at:continue
-        responses=MatrixReview.query.filter_by(project_id=p.id,round_id=r.id).all()
-        ids={x.reviewee_id for x in responses}
-        items=[]
-        for uid in sorted(ids):
-            rs=[x for x in responses if x.reviewee_id==uid]
-            attitude=round(sum(x.attitude10 or x.attitude*2 for x in rs)/len(rs),2)
-            quality=round(sum(x.quality10 or x.quality*2 for x in rs)/len(rs),2)
-            items.append({'user':user_brief(uid),'count':len(rs),'attitude':attitude,'quality':quality,'average':round((attitude+quality)/2,2)})
-        out.append({'title':r.title,'items':items})
-    return out
-
-@bp.put('/projects/<int:pid>/peer')
-@command()
-def peer_save(pid):
-    p=project(pid,mutable=True);need(membership(pid),'FORBIDDEN','Chỉ thành viên đánh giá',403)
-    b=json_body();r=get(PeerRound,integer(b.get('round_id')))
-    need(r.assignment_id==p.assignment_id and r.status=='open' and r.opens_at<=now()<=r.closes_at,'ROUND_CLOSED','Đợt đánh giá đã đóng',409)
-    items=b.get('items');need(isinstance(items,list))
-    allowed={m.user_id for m in members(pid)}-{current_user().id};seen=set()
-    for i in items:
-        uid=integer(i.get('reviewee_id'));need(uid in allowed and uid not in seen);seen.add(uid)
-        row=MatrixReview.query.filter_by(project_id=pid,round_id=r.id,reviewer_id=current_user().id,reviewee_id=uid).first()
-        if i.get('skip'):
-            if row:db.session.delete(row)
-            continue
-        at=integer(i.get('attitude'),1,10);qu=integer(i.get('quality'),1,10)
-        if not row:
-            row=MatrixReview(project_id=pid,round_id=r.id,reviewer_id=current_user().id,reviewee_id=uid);db.session.add(row)
-        row.attitude10=at;row.quality10=qu;row.attitude=(at+1)//2;row.quality=(qu+1)//2;row.comment=''
-    return {'saved':True}
-
 @bp.get('/projects/<int:pid>/report')
 @command()
 def report(pid):return report_data(project(pid))
@@ -196,7 +158,9 @@ def report(pid):return report_data(project(pid))
 def report_data(p):
     d=group_report(p);d.pop('quality',None)
     d['course']=dto(get(CourseOffering,get(Assignment,p.assignment_id).course_id))
-    d['peer']=peer_results(p)
+    d['peer']=_task_review.member_summary(p)
+    d['peer_tasks']=_task_review.task_rows(p)
+    d['review_days']=_task_review.REVIEW_DAYS
     d['evidence']=_evidence.evidence_summary(p)
     d['departures']=[departure_dto(x) for x in GroupDeparture.query.filter_by(project_id=p.id)]
     d['deliveries']=[dto(x) for x in GroupDelivery.query.filter_by(project_id=p.id).order_by(GroupDelivery.id.desc())]
@@ -206,7 +170,7 @@ def report_data(p):
     d['allocation_history']=[{**dto(x),'decided_by_name':user_brief(x.decided_by)['full_name']} for x in AllocationChange.query.join(Task).filter(Task.project_id==p.id)]
     events=AuditEvent.query.filter_by(project_id=p.id).filter(AuditEvent.action.in_(['task.created','task.started','task.submitted','submission.accepted','submission.returned','submission.referred'])).order_by(AuditEvent.created_at,AuditEvent.id).all()
     d['timeline']=[{'at':iso(e.created_at),'action':e.action,'reason':e.reason or ''} for e in events]
-    d['formula']='Khối lượng đã duyệt × tỷ lệ đóng góp của từng công việc. Tỷ trọng = khối lượng ghi nhận cá nhân / tổng khối lượng ghi nhận × 100. Đánh giá chéo: trung bình các phiếu hợp lệ theo từng tiêu chí; không tính phiếu bỏ qua là 0.'
+    d['formula']='Khối lượng đã duyệt × tỷ lệ đóng góp của từng công việc. Tỷ trọng = khối lượng ghi nhận cá nhân / tổng khối lượng ghi nhận × 100. Đánh giá chéo theo công việc: các thành viên không làm công việc đánh giá người làm (Hợp tác, Chất lượng, thang 1–10) trong 7 ngày sau khi công việc hoàn thành; điểm là trung bình các phiếu hợp lệ, công bố sau hạn, không tính phiếu bỏ qua là 0 và không hiển thị người đánh giá.'
     return d
 
 @bp.route('/projects/<int:pid>/snapshots',methods=['GET','POST'])
@@ -281,7 +245,7 @@ def retired_workflows():
     if not path.startswith('/api/v1/'):return
     if path.endswith('/report/download') and '/workflow/' not in path:
         pid=request.view_args.get('pid');return redirect(f'/api/v1/workflow/projects/{pid}/export?format='+request.args.get('format','html'))
-    blocked=('/grades','/quality','/commitment','/analytics','/peer-matrix','/policies','/policy','/branches','/merge-requests','/extract-tasks','/heartbeat','/task-drafts','/workspace-templates','/apply-template')
+    blocked=('/evaluation-rounds','/grades','/quality','/commitment','/analytics','/peer-matrix','/policies','/policy','/branches','/merge-requests','/extract-tasks','/heartbeat','/task-drafts','/workspace-templates','/apply-template')
     if '/workflow/' not in path and (any(x in path for x in blocked) or path.endswith('/activate') and '/projects/' in path or path.endswith('/members') and request.method!='GET' or '/change-requests' in path or '/meetings' in path or '/final-submissions' in path or '/rubric' in path):
         need(False,'RETIRED','Chức năng đã được thay bằng luồng mới',410)
 

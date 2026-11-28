@@ -34,6 +34,9 @@ class Config:
     }
     MEETING_AI_API_KEY = os.getenv("MEETING_AI_API_KEY", "")
     MEETING_AI_MODEL = os.getenv("MEETING_AI_MODEL", "gpt-4.1-mini")
+    # AI lập kế hoạch/timeline: Google Gemini (gói miễn phí). Không có key thì dùng bộ sinh theo quy tắc.
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     SSO_ALLOWED_DOMAINS = [x.strip().lower() for x in os.getenv("SSO_ALLOWED_DOMAINS", "").split(",") if x.strip()]

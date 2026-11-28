@@ -133,14 +133,45 @@ def test_group_formation_approval_and_teacher_add(app):
     ids=[uid(app,e) for e in free[3:6]]
     new=teacher.req(f'/workflow/assignments/{d["aid"]}/groups',{'name':'Nhóm xếp sẵn','user_ids':ids,'leader_id':ids[0]},code=201);assert len(new['members'])==3
 
-def test_peer_optional_anonymous_and_closed_aggregate(app):
-    d=demo(app);teacher=Client(app,GV);r=teacher.req(f'/assignments/{d["aid"]}/evaluation-rounds',{'title':'Đợt 1','closes_at':(now()+timedelta(days=2)).isoformat()},code=201)
-    c=Client(app,TH);c.req(f'/workflow/projects/{d["pid"]}/peer',{'round_id':r['id'],'items':[{'reviewee_id':uid(app,QB),'attitude':8,'quality':6},{'reviewee_id':uid(app,GL),'skip':True}]},method='PUT')
-    assert teacher.req(f'/workflow/projects/{d["pid"]}/peer')['results']==[]
-    teacher.req(f'/evaluation-rounds/{r["id"]}/close',{'version':r['version']})
-    result=teacher.req(f'/workflow/projects/{d["pid"]}/peer')['results'][0]['items'][0]
-    assert result['average']==7 and result['count']==1 and 'reviewer_id' not in result
-    other=Client(app,QB);assert other.req(f'/workflow/projects/{d["pid"]}/peer')['results'][0]['items'][0]==result
+def set_clock(app, at):
+    with app.app_context():
+        row = db.session.get(RuntimeSetting, 'demo_clock')
+        row.value = {'at': at.isoformat()}; db.session.commit()
+
+def test_peer_per_task_optional_anonymous_and_published_after_window(app):
+    """Đánh giá chéo theo công việc: người không làm đánh giá người làm; công bố sau 7 ngày, ẩn danh."""
+    d=demo(app);ma,th,qb,gl,teacher=(Client(app,e) for e in (MA,TH,QB,GL,GV))
+    peer=th.req(f'/workflow/projects/{d["pid"]}/peer')
+    t=next(x for x in peer['tasks'] if x['title']=='Chuẩn hóa mẫu phản hồi khách hàng')  # workers: Gia Linh + Minh Anh
+    assert t['open'] and t['can_review'] and {u['id'] for u in t['workers']}=={uid(app,GL),uid(app,MA)} and 'results' not in t
+    assert peer['pending']>=1
+    # workers cannot review their own task; the old round endpoints are retired
+    gl.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,MA),'attitude':9,'quality':9}]},method='PUT',code=403)
+    teacher.req(f'/assignments/{d["aid"]}/evaluation-rounds',{'title':'Đợt 1','closes_at':(now()+timedelta(days=2)).isoformat()},code=410)
+    th.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,QB),'attitude':8,'quality':8}]},method='PUT',code=400)  # not a worker
+    th.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,GL),'attitude':8,'quality':6,'comment':'Bàn giao rõ ràng'},{'reviewee_id':uid(app,MA),'skip':True}]},method='PUT')
+    saved=qb.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,GL),'attitude':10,'quality':9},{'reviewee_id':uid(app,MA),'attitude':7,'quality':7}]},method='PUT')
+    assert saved['reviewed']==2 and saved['can_review']
+    qb.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,GL),'attitude':9,'quality':9}]},method='PUT')  # edit before closing
+    hidden=next(x for x in teacher.req(f'/workflow/projects/{d["pid"]}/peer')['tasks'] if x['id']==t['id'])
+    assert 'results' not in hidden and hidden['received']==3
+    # after the 7-day window results are published (anonymous), editing is closed
+    set_clock(app,now()+timedelta(days=8))
+    pub=next(x for x in teacher.req(f'/workflow/projects/{d["pid"]}/peer')['tasks'] if x['id']==t['id'])
+    gl_row=next(r for r in pub['results'] if r['user']['id']==uid(app,GL))
+    assert pub['published'] and gl_row['count']==2 and gl_row['attitude']==8.5 and gl_row['quality']==7.5 and gl_row['average']==8
+    assert gl_row['comments']==['Bàn giao rõ ràng'] and 'reviewer_id' not in str(pub)
+    assert next(x for x in ma.req(f'/workflow/projects/{d["pid"]}/peer')['tasks'] if x['id']==t['id'])['results']==pub['results']
+    th.req(f'/workflow/tasks/{t["id"]}/peer',{'items':[{'reviewee_id':uid(app,GL),'attitude':1,'quality':1}]},method='PUT',code=409)
+    rep=ma.req(f'/workflow/projects/{d["pid"]}/report')
+    assert any(r['task_title']==t['title'] and r['user']['id']==uid(app,GL) for r in rep['peer_tasks'])
+    for fmt in ('xlsx','pdf','html'):
+        r=ma.req(f'/workflow/projects/{d["pid"]}/export?format={fmt}');assert len(r.data)>1000
+    from openpyxl import load_workbook
+    wb=load_workbook(io.BytesIO(ma.req(f'/workflow/projects/{d["pid"]}/export?format=xlsx').data))
+    rows=[[c.value for c in r] for r in wb['Đánh giá theo công việc'].iter_rows(min_row=2)]
+    assert any(r[0]==t['title'] and r[1]==name_of(app,GL) and r[2]==2 and r[6]=='Bàn giao rõ ràng' for r in rows)
+    assert 'Bàn giao rõ ràng' in ma.req(f'/workflow/projects/{d["pid"]}/export?format=html').get_data(as_text=True)
 
 def test_teacher_support_without_invitation_and_required_fields(app):
     d=demo(app);c=Client(app,QB);c.req(f'/projects/{d["pid"]}/help-requests',{'subject':'Lỗi'},code=400)

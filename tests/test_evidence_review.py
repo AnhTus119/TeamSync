@@ -250,14 +250,20 @@ def test_schedule_owner_edit_share_and_scope(app):
 
 
 def test_member_cards_code_and_published_score_only(app):
-    d = demo(app); pid, aid = d['pid'], d['aid']
-    gv1, sv1, sv2 = Client(app, GV), Client(app, MA), Client(app, TH)
+    from test_workflow import set_clock
+    d = demo(app); pid = d['pid']
+    sv1, sv2, sv3 = Client(app, MA), Client(app, TH), Client(app, QB)
     p = sv1.req(f'/projects/{pid}')
-    assert all(m['student_code'] for m in p['members']) and all(m['peer_score'] is None for m in p['members'])
-    r = gv1.req(f'/assignments/{aid}/evaluation-rounds', {'title': 'Đợt thử', 'closes_at': (now() + timedelta(days=2)).isoformat()}, code=201)
-    target = next(m for m in p['members'] if m['user']['email'] == QB)
-    sv2.req(f'/workflow/projects/{pid}/peer', {'round_id': r['id'], 'items': [{'reviewee_id': target['user_id'], 'attitude': 9, 'quality': 8}]}, method='PUT')
-    assert next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == target['user_id'])['peer_score'] is None  # round still open
-    gv1.req(f'/evaluation-rounds/{r["id"]}/close', {'version': r['version']})
-    m = next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == target['user_id'])
-    assert m['peer_score'] == 8.5 and 'reviewer_id' not in m
+    assert all(m['student_code'] for m in p['members'])
+    before = {m['user_id']: m['peer_score'] for m in p['members']}
+    t = next(x for x in sv2.req(f'/workflow/projects/{pid}/peer')['tasks'] if x['title'] == 'Chuẩn hóa mẫu phản hồi khách hàng')
+    gl = next(u for u in t['workers'] if u['full_name'] == name_of(app, GL))
+    sv2.req(f'/workflow/tasks/{t["id"]}/peer', {'items': [{'reviewee_id': gl['id'], 'attitude': 9, 'quality': 8}]}, method='PUT')
+    sv3.req(f'/workflow/tasks/{t["id"]}/peer', {'items': [{'reviewee_id': gl['id'], 'attitude': 10, 'quality': 10}]}, method='PUT')
+    m = next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == gl['id'])
+    assert m['peer_score'] == before[gl['id']]  # still open: not counted
+    set_clock(app, now() + timedelta(days=8))
+    m = next(m for m in sv1.req(f'/projects/{pid}')['members'] if m['user_id'] == gl['id'])
+    assert m['peer_score'] is not None and 'reviewer_id' not in m
+    summary = next(x for x in sv1.req(f'/workflow/projects/{pid}/peer')['members'] if x['user']['id'] == gl['id'])
+    assert summary['average'] == m['peer_score']  # same number on the member card and the peer tab

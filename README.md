@@ -23,7 +23,7 @@ Chạy test: cấu hình **TeamSync: chạy toàn bộ test** hoặc `python -m 
 4. Nhấn Run trên `run.py`.
 5. Mở http://127.0.0.1:5000. Lần đầu chương trình chạy migrations và tạo dữ liệu demo.
 
-Không cần Docker, Node, Redis hoặc dịch vụ ngoài. File `.env` không bắt buộc. Cổng khác: đặt `PORT=5001` trong Environment variables của Run Configuration.
+Không cần Docker, Node, Redis hoặc dịch vụ ngoài. File `.env` không bắt buộc (chỉ cần nếu muốn dùng AI Gemini miễn phí, xem mục AI hỗ trợ tạo timeline). Cổng khác: đặt `PORT=5001` trong Environment variables của Run Configuration.
 
 ## Tài khoản demo
 
@@ -55,14 +55,16 @@ Khối trên: Việc cần chú ý với sáu chỉ số và công tắc Cột /
 
 ## Các trang chính
 
-- **Sidebar**: Tổng quan, Dự án của tôi, Bảng Kanban, Timeline, Bài nộp, Học phần, mỗi mục có icon. Chỉ Tổng quan còn khối tiêu đề lớn; các trang danh sách bắt đầu ngay bằng hàng công cụ.
+- **Sidebar**: sinh viên có Tổng quan, Dự án của tôi, Bảng Kanban, Timeline, Bài nộp, Học phần; giảng viên và quản lý học phần chỉ có **Tổng quan, Timeline, Học phần** (không có danh sách dự án ở sidebar; bài được chuyển duyệt nằm ở panel *Bài được chuyển cho tôi* trên Tổng quan). Mỗi mục có icon. Chỉ Tổng quan còn khối tiêu đề lớn; các trang danh sách bắt đầu ngay bằng hàng công cụ.
 - **Tiêu đề trang** dùng font nội dung (chữ hoa). Chữ TeamSync trên thanh đầu trang dùng Audiowide.
 - **Chi tiết dự án**: thanh đầu một hàng (icon · tên + đội · trạng thái · số thành viên · tiến độ · Học phần), tab có icon. Tab **Thành viên** hiển thị thẻ dọc: họ tên (font Electrolize, OFL; chữ có dấu tiếng Việt lấy glyph của font nội dung vì Electrolize chỉ có bộ Latin), ảnh đại diện, Email / Vai trò / Mã sinh viên và Điểm hiện tại = trung bình đánh giá chéo đã công bố (đợt đã đóng) trong dự án đó. Chưa có điểm thì hiện "Chưa có điểm". Người đã rời liệt kê riêng dưới lưới.
 - **Ảnh đại diện mặc định** nằm ở `app/static/img/avatars/` (smile, crown, headband, pixel, blush, tongue `.svg`), chọn ổn định theo `user.id`. Muốn dùng bộ ảnh gốc, thay các tệp cùng tên (có thể đổi đuôi và sửa danh sách `AVATARS` trong `workspace.js`). Nếu API trả `avatar_url` thì ưu tiên ảnh đó, ảnh lỗi tự quay về ảnh mặc định.
 - **Dự án của tôi**: hàng công cụ gồm Tất cả / Tôi làm lead, tìm kiếm, sắp xếp (Tiến độ giảm dần mặc định, Tiến độ tăng dần, Ngày tạo mới nhất) và nút Tạo dự án. Màu nền thẻ theo tiến độ (hoàn thành / tổng): 0% `#FCFAF9`, 1–24% `#E7EFF6`, 25–49% `#E0EFED`, 50–99% `#DCE9E0`, 100% `#CFE5D1`. Tạo dự án: sinh viên chọn học phần đang mở tự lập nhóm và nhập tên (POST `/api/v1/assignments/{id}/projects`); giảng viên chọn học phần rồi xếp nhóm.
 - **Bảng Kanban** (`/kanban`, `/my-tasks`) là bảng cá nhân: chỉ task bạn phụ trách hoặc cùng làm (`GET /api/v1/workflow/tasks?scope=mine`). Việc của đồng đội đang chờ bạn duyệt nằm ở Bài nộp → Cần tôi duyệt. Bộ lọc: tìm kiếm, dự án, Quá hạn, Cần sửa; vẫn nhận `?filter=repair|due|review`. Trong mỗi cột, thẻ xếp theo ưu tiên cao → vừa → thấp rồi hạn sớm trước. Các thẻ số trên Tổng quan đếm trên cùng tập task cá nhân này.
 - **Bài nộp**: ba tab Bài của tôi / Cần sửa / Cần tôi duyệt (giảng viên: Đã xử lý / Được chuyển cho tôi).
-- **Timeline** (`/timeline`): lịch theo ngày, việc trong cùng ngày xếp chồng trong một cột, mục nhiều ngày trải ngang, mỗi loại một màu (Công việc nhóm, Họp nhóm, Mốc nộp, Học tập, Rà soát, Cá nhân, Khác). Tab **Lịch của tôi** chỉ xem: task được giao (theo hạn) và mục lịch được chia sẻ với dự án của bạn. Tab **Lịch tôi tạo** sửa trực tiếp: kéo thả đổi ngày (giữ độ dài), Alt + ←/→ dời một ngày, bấm để sửa tiêu đề/loại/ngày/ghi chú/chia sẻ, bấm đúp vào một ngày để thêm. API: `GET/POST /api/v1/workflow/schedule`, `PATCH/DELETE /api/v1/workflow/schedule/{id}` (chỉ người tạo được sửa).
+- **Chuyển trang**: thanh trên và sidebar đứng yên, chỉ phần nội dung đổi (không tải lại trang; Back/Forward và link trực tiếp vẫn dùng được). Dữ liệu đọc được giữ tạm **5 phút** rồi tự làm mới (bỏ qua khi đang mở hộp thoại hoặc đang nhập), hoặc khi bấm F5. Mọi thao tác ghi của chính người dùng xóa bộ nhớ tạm nên kết quả hiện ngay ở mọi trang; thay đổi của người khác hiện sau tối đa 5 phút hoặc khi F5.
+- **Học phần (giảng viên/quản lý)**: mở một lớp là thấy ngay tab **Nhóm dự án**: lưới thẻ mọi nhóm (đội, trưởng nhóm, thành viên, tiến độ, chờ duyệt / hỗ trợ / quá hạn / việc chờ duyệt), nhóm cần chú ý lên đầu, có ô tìm. Tab *Đề bài & tiêu chí* và *Sinh viên* giữ nguyên.
+- **Timeline** (`/timeline`): lịch theo ngày, việc trong cùng ngày xếp chồng trong một cột, mục nhiều ngày trải ngang, mỗi loại một màu (Công việc nhóm, Họp nhóm, Mốc nộp, Học tập, Rà soát, Cá nhân, Khác). Tab **Lịch của tôi** chỉ xem: task được giao (theo hạn), mốc của đề bài (hạn nộp, hạn lập nhóm) và mục lịch được chia sẻ với dự án của bạn. Giảng viên thấy mốc các lớp, lịch các nhóm chia sẻ và lịch tự tạo (không có task), lọc theo học phần / nhóm. Tab **Lịch tôi tạo** sửa trực tiếp: kéo thả đổi ngày (giữ độ dài), Alt + ←/→ dời một ngày, bấm để sửa tiêu đề/loại/ngày/ghi chú/chia sẻ, bấm đúp vào một ngày để thêm. API: `GET/POST /api/v1/workflow/schedule`, `PATCH/DELETE /api/v1/workflow/schedule/{id}` (chỉ người tạo được sửa).
 
 ## Quy tắc chính
 
@@ -76,15 +78,21 @@ Khối trên: Việc cần chú ý với sáu chỉ số và công tắc Cột /
 - Tiêu chí minh chứng do giảng viên thêm/ẩn/bật lại tại Đề bài & tiêu chí. Khi nộp có thể gắn tệp/link của chính lần nộp với tiêu chí (tùy chọn). Tiêu chí ẩn không nhận minh chứng mới nhưng lịch sử vẫn giữ. Báo cáo đếm Đã duyệt / Chờ duyệt / Cần sửa theo lần nộp mới nhất của từng task.
 - Yêu cầu sửa cần nhận xét và hạn sửa. Lần nộp cũ giữ thời hạn cũ; lần sửa dùng hạn mới.
 - Điều chỉnh đóng góp bắt đầu tại task, cần lý do, giải trình/cơ hội giải trình và tổng 100%. Liên quan trưởng nhóm chuyển giảng viên; trường hợp thường do trưởng nhóm xử lý.
-- Đánh giá chéo tùy chọn, được bỏ qua và sửa trước hạn. Chỉ công bố tổng hợp sau khi đóng. Không đưa danh tính người đánh giá lên UI/API báo cáo. Trong nhóm nhỏ vẫn có thể suy đoán; dữ liệu nguồn có liên kết người gửi trong DB để chống gửi trùng, không phải ẩn danh với người có toàn quyền database.
+- Đánh giá chéo **theo từng công việc** (thay cho đợt đánh giá; API đợt cũ trả 410): khi task được duyệt hoàn thành, mọi thành viên không làm task đó đánh giá người làm (theo roster của lần nộp được duyệt) với Hợp tác và Chất lượng thang 1–10, kèm nhận xét tùy chọn. Phiếu mở **7 ngày** sau khi hoàn thành, tùy chọn, được bỏ qua (không tính là 0) và sửa trước hạn. Hết hạn mới công bố trung bình, số phiếu và nhận xét. Điểm hiện tại trên thẻ thành viên, ô điểm ở Tổng quan, tab Đánh giá chéo và báo cáo/XLSX/PDF dùng cùng một công thức: trung bình (Hợp tác + Chất lượng)/2 của các phiếu đã công bố. Không đưa danh tính người đánh giá lên UI/API báo cáo. Trong nhóm nhỏ vẫn có thể suy đoán; dữ liệu nguồn có liên kết người gửi trong DB để chống gửi trùng, không phải ẩn danh với người có toàn quyền database.
 - Đánh giá chéo không tự đổi đóng góp; trưởng nhóm dùng làm căn cứ xử lý trên task cụ thể.
 - Bộ tiêu chí chỉ là tài liệu giảng viên tải lên cùng đề bài, không bắt buộc. Không chấm điểm học phần, không tự đánh giá rubric, không Commitment Index.
-- Biên bản họp lưu chủ đề/kết luận/link; có thể tạo task từ kết luận. Trao đổi ngoài qua Zalo, không tích hợp tài khoản Zalo. Không video/AI nhúng.
-- Bàn giao sản phẩm nhóm chọn các bài đã duyệt, không tải lại file. Báo cáo XLSX/PDF/HTML và bản lưu tại thời điểm chốt.
+- Biên bản họp lưu chủ đề/kết luận/link; có thể tạo task từ kết luận. Trao đổi ngoài qua Zalo, không tích hợp tài khoản Zalo. Không video nhúng.
+- Bàn giao sản phẩm nhóm chọn các bài đã duyệt, không tải lại file. Báo cáo XLSX/PDF/HTML luôn lấy dữ liệu mới nhất (đã bỏ mục Báo cáo đã lưu).
+
+## AI hỗ trợ tạo timeline
+
+- **Trưởng nhóm** (Bảng công việc của nhóm → *AI lập kế hoạch*): AI đọc đề bài, hạn nộp, thành viên và khối lượng đang mở, đề xuất giai đoạn + công việc có hạn, người phụ trách, khối lượng, ưu tiên. Sửa / bỏ chọn từng dòng rồi mới tạo task (qua API tạo công việc thông thường, không vượt hạn đề bài, không lặp task đã có).
+- **Mọi người** (Timeline → *AI sắp lịch*): xếp lịch cá nhân 4 tuần từ task được giao, bài chờ mình duyệt và phiếu đánh giá chéo đang mở, tránh trùng lịch đã có; lưu thành mục lịch ở *Lịch tôi tạo*.
+- Nguồn: **Google Gemini gói miễn phí** nếu đặt `GEMINI_API_KEY` trong `.env` (tạo key tại https://aistudio.google.com/apikey; tùy chọn `GEMINI_MODEL`, mặc định `gemini-2.5-flash`). Không có key, hết lượt miễn phí hoặc lỗi mạng thì tự dùng bộ sinh theo quy tắc nên demo luôn chạy. Đầu ra AI được kiểm tra (thành viên hợp lệ, ngày trong hạn, khối lượng 1/2/3/5) trước khi hiển thị.
 
 ## Source
 
-`app/academic/workflow.py`: nghiệp vụ mới; `evidence.py`: quyền duyệt độc lập, chuyển giảng viên, tiêu chí minh chứng, hàng đợi Bài nộp và dữ liệu Tổng quan; `showcase_seed.py`: bộ demo Free2do; `workflow_reports.py`: xuất báo cáo; `workflow_seed.py`: demo.
+`app/academic/workflow.py`: nghiệp vụ mới; `task_review.py`: đánh giá chéo theo công việc; `ai_plan.py`: AI lập kế hoạch / sắp lịch; `evidence.py`: quyền duyệt độc lập, chuyển giảng viên, tiêu chí minh chứng, hàng đợi Bài nộp và dữ liệu Tổng quan; `showcase_seed.py`: bộ demo Free2do; `workflow_reports.py`: xuất báo cáo; `workflow_seed.py`: demo.
 `app/static/js/workspace.js`, `app/static/css/workspace.css`, `app/templates/academic/workspace.html`: giao diện chính.
 `app/models/workflow.py`: biểu quyết, bản báo cáo, bàn giao, chống trùng nhắc hạn.
 Các module tài khoản/dự án dùng chung và migrations được giữ để tạo database và bảo toàn quan hệ. API nghiệp vụ cũ đã nghỉ được chặn, không chỉ ẩn UI.

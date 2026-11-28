@@ -22,12 +22,33 @@ def day(value, field):
         need(False, message=f'{field}: cần ngày dạng YYYY-MM-DD')
 
 
+def course_of(p):
+    a = db.session.get(Assignment, p.assignment_id) if p and p.assignment_id else None
+    return a.course_id if a else None
+
+
 def item_dto(x, editable):
     p = db.session.get(Project, x.project_id) if x.project_id else None
     return {'id': x.id, 'kind': 'item', 'title': x.title, 'note': x.note, 'category': x.category,
             'start': x.start_date.isoformat(), 'end': x.end_date.isoformat(), 'project_id': x.project_id,
-            'project_name': p.name if p else '', 'owner_name': user_brief(x.owner_id)['full_name'],
-            'editable': editable, 'version': x.version}
+            'project_name': p.name if p else '', 'course_id': course_of(p), 'owner_id': x.owner_id,
+            'owner_name': user_brief(x.owner_id)['full_name'], 'editable': editable, 'version': x.version}
+
+
+def milestones(uid, lo, hi):
+    """Course deadlines visible to the user: assignment due dates and group formation deadlines."""
+    out = []
+    for e in CourseEnrollment.query.filter_by(user_id=uid, status='active'):
+        c = db.session.get(CourseOffering, e.course_id)
+        for a in Assignment.query.filter_by(course_id=c.id).order_by(Assignment.id):
+            if a.is_hidden and e.role not in STAFF:
+                continue
+            for key, label, at in (('due', 'Hạn nộp đề bài', a.due_at), ('formation', 'Hạn lập nhóm', a.formation_due_at)):
+                if at and lo <= at <= hi:
+                    out.append({'id': f'{a.id}-{key}', 'kind': 'milestone', 'title': f'{label}: {a.title}', 'note': '', 'category': 'deadline',
+                                'due_at': iso(at), 'course_id': c.id, 'project_id': None, 'project_name': c.title, 'editable': False,
+                                'link': f'/courses/{c.id}?tab=brief'})
+    return out
 
 
 def my_project_ids(uid):
@@ -111,14 +132,18 @@ def register(bp):
                     continue
                 items.append({'id': t.id, 'kind': 'task', 'title': t.title, 'note': '', 'category': 'task', 'due_at': iso(t.due_at),
                               'status': t.status, 'overdue': t.status in ('todo', 'in_progress') and t.due_at < now(),
-                              'project_id': p.id, 'project_name': p.name, 'editable': False, 'link': f'/tasks/{t.id}'})
+                              'project_id': p.id, 'project_name': p.name, 'course_id': course_of(p), 'editable': False, 'link': f'/tasks/{t.id}'})
+            items.extend(milestones(uid, lo, hi))
         projects = []
         for pid in sorted(my_project_ids(uid)):
             p = db.session.get(Project, pid)
             if p and p.status != 'archived':
-                projects.append({'id': p.id, 'name': p.name + (f' · {p.team_name}' if p.team_name else '')})
+                projects.append({'id': p.id, 'name': p.name + (f' · {p.team_name}' if p.team_name else ''), 'course_id': course_of(p)})
+        staff = [e for e in CourseEnrollment.query.filter_by(user_id=uid, status='active') if e.role in STAFF]
+        courses = [{'id': e.course_id, 'title': db.session.get(CourseOffering, e.course_id).title} for e in staff]
         return {'items': items, 'from': start.isoformat(), 'to': end.isoformat(), 'today': today.isoformat(),
-                'categories': [{'key': k, 'label': v} for k, v in CATEGORIES.items()], 'projects': projects, 'view': view}
+                'categories': [{'key': k, 'label': v} for k, v in CATEGORIES.items()], 'projects': projects, 'courses': courses,
+                'is_staff': bool(staff), 'view': view}
 
     @bp.route('/schedule/<int:iid>', methods=['PATCH', 'DELETE'])
     @command()

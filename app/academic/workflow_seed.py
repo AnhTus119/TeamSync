@@ -15,7 +15,7 @@ from werkzeug.security import generate_password_hash
 from .core import *
 from ..models import Workspace, WorkspaceMember, ProjectMember
 from ..models.teamwork import Meeting, MatrixReview
-from ..models.workflow import EvidenceCriterion, SubmissionEvidence, SubmissionReferral, ScheduleItem
+from ..models.workflow import EvidenceCriterion, SubmissionEvidence, SubmissionReferral, ScheduleItem, TaskPeerReview
 
 KEY = 'khmt_demo_v1'
 SEED = 20261128
@@ -141,11 +141,46 @@ def slug(text):
 
 def seed_demo():
     if db.session.get(RuntimeSetting, KEY):
+        seed_task_reviews()  # existing demo database: add the per-task review samples once
         return
     if CourseOffering.query.first():
         logging.getLogger(__name__).warning('Database đã có dữ liệu khác; không nạp dữ liệu demo KHMT. Sao lưu rồi xóa thư mục instance để dùng dữ liệu mới.')
         return
     Builder().run()
+
+
+REVIEW_KEY = 'task_reviews_v1'
+COMMENTS = ['Bàn giao rõ ràng, có hướng dẫn kiểm tra.', 'Phản hồi nhanh khi nhóm hỏi.', 'Nên cập nhật tiến độ sớm hơn.',
+            'Chất lượng tốt, đúng đầu ra yêu cầu.', 'Cần ghi chú kỹ hơn trong tệp bàn giao.', '', '', '']
+
+
+def seed_task_reviews(commit=True):
+    """Sample per-task peer reviews for completed demo tasks (once per database).
+
+    Reviewers are active members who did not work on the task; about 70% of them review.
+    Tasks completed more than 7 days ago therefore show published results; recent ones stay open."""
+    if db.session.get(RuntimeSetting, REVIEW_KEY):
+        return
+    from .task_review import workers, reviewers, is_open
+    rnd = random.Random(SEED + 7)
+    personas = {u.id for u in User.query.filter(User.email.in_([f'{k}@{STUDENT_DOMAIN}' for k, _ in PERSONAS]))}
+    for t in Task.query.filter_by(status='done').order_by(Task.id):
+        p = db.session.get(Project, t.project_id)
+        if not p or p.mode != 'academic' or p.status != 'active':
+            continue
+        ws = workers(t)
+        still_open = is_open(t)
+        for rv in reviewers(t):
+            if rnd.random() > 0.7 or (still_open and rv in personas):  # personas keep open reviews to try in the demo
+                continue
+            for wid in ws:
+                if TaskPeerReview.query.filter_by(task_id=t.id, reviewer_id=rv, reviewee_id=wid).first():
+                    continue
+                db.session.add(TaskPeerReview(task_id=t.id, project_id=p.id, reviewer_id=rv, reviewee_id=wid,
+                                              attitude=rnd.randint(6, 10), quality=rnd.randint(5, 10), comment=rnd.choice(COMMENTS)))
+    db.session.add(RuntimeSetting(key=REVIEW_KEY, value={'version': 1}))
+    if commit:
+        db.session.commit()
 
 
 class Builder:
@@ -359,6 +394,8 @@ class Builder:
                     self.random_task(p, a, members, leader, title_, active)
             self.courses.append((c, a, teacher, groups, peer_closed))
         self.extras(personas, students, teachers)
+        db.session.flush()
+        seed_task_reviews(commit=False)
         db.session.add(RuntimeSetting(key=KEY, value={'version': 1}))
         db.session.add(RuntimeSetting(key='demo_clock', value={}))
         db.session.commit()
@@ -413,21 +450,15 @@ class Builder:
         helps = ['Xin hướng dẫn phạm vi chức năng bắt buộc', 'Nhóm chưa thống nhất cách chia khối lượng', 'Cần góp ý cấu trúc báo cáo',
                  'Lỗi môi trường khi chạy trên máy phòng thực hành', 'Xin xác nhận bộ dữ liệu được phép dùng']
         for c, a, teacher, groups, peer_closed in self.courses:
-            if peer_closed:
-                r = PeerRound(assignment_id=a.id, title='Đánh giá giữa kỳ', opens_at=at - timedelta(days=12), closes_at=at - timedelta(days=4),
-                              status='closed', criteria_json=[], roster_json={})
-                db.session.add(r)
-                db.session.flush()
             for p, members, leader in groups:
                 if p.status != 'active':
                     continue
                 if peer_closed:
+                    # Old evaluation rounds are retired; keep the random sequence so the rest of the demo data stays identical.
                     for rv in members:
                         for re_ in members:
                             if rv != re_ and rnd.random() < 0.8:
-                                a10, q10 = rnd.randint(6, 10), rnd.randint(5, 10)
-                                db.session.add(MatrixReview(round_id=r.id, project_id=p.id, reviewer_id=rv.id, reviewee_id=re_.id, attitude10=a10,
-                                                            quality10=q10, attitude=(a10 + 1) // 2, quality=(q10 + 1) // 2, comment=''))
+                                rnd.randint(6, 10), rnd.randint(5, 10)
                 if rnd.random() < 0.3:
                     db.session.add(HelpRequest(project_id=p.id, requested_by=rnd.choice(members).id, assigned_to=teacher.id, subject=rnd.choice(helps),
                                                content='Nhóm mô tả khó khăn và mong giảng viên góp ý hướng xử lý.',

@@ -74,3 +74,24 @@ class ScheduleItem(Entity, db.Model):
     category = db.Column(S(20), nullable=False, default='other')
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
+
+class TaskPeerReview(Entity, db.Model):
+    """One member's review of one worker on one completed task (1–10 scale, optional comment).
+
+    The reviewer link exists only to prevent duplicates and allow edits before the deadline;
+    UI/API/report never expose who reviewed whom."""
+    __tablename__ = 'task_peer_review'
+    __table_args__ = (db.UniqueConstraint('task_id', 'reviewer_id', 'reviewee_id'),
+                      db.Index('ix_task_peer_review_project', 'project_id', 'reviewee_id'),
+                      db.CheckConstraint('reviewer_id != reviewee_id'),
+                      db.CheckConstraint('skipped OR attitude BETWEEN 1 AND 10'),
+                      db.CheckConstraint('skipped OR quality BETWEEN 1 AND 10'))
+    task_id = fk('task', nullable=False)
+    project_id = fk('project', nullable=False)
+    reviewer_id = fk('user', nullable=False)
+    reviewee_id = fk('user', nullable=False)
+    attitude = db.Column(db.Integer)
+    quality = db.Column(db.Integer)
+    comment = db.Column(T, nullable=False, default='')
+    # "Chưa đủ cơ sở / bỏ qua": the reviewer has answered, but the row never counts in any score.
+    skipped = db.Column(db.Boolean, nullable=False, default=False)
